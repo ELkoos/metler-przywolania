@@ -56,7 +56,7 @@ Instalacja z pliku `przywolania.apk` (tak jak aplikacja EasyStorage: zgoda na in
 
 Przy pierwszym uruchomieniu ekran **Ustawienia**:
 
-- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu jak w EasyStorage (np. `KONT_12`; wielkie litery i `_` ustawiane automatycznie).
+- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu jak w EasyStorage (np. `KONTR_12`; wielkie litery i `_` ustawiane automatycznie).
 - **Terminal**: tryb „Terminal pracownika”, adres serwera, klucz urządzeń. Na liście uprawnień dotknij każdej pozycji z ✗:
   powiadomienia, praca w tle bez ograniczeń baterii, **wyświetlanie nad innymi aplikacjami** (ekran wezwania pojawia się nad EasyStorage),
   powiadomienia pełnoekranowe (Android 14+).
@@ -70,7 +70,7 @@ Ponowne wejście w ustawienia: ikona ⚙ i klucz urządzeń.
   (albo automatycznie po 10 min bez połączenia).
 - Tablet: dotknięcie osoby = wezwanie. Ponowne dotknięcie własnego wezwania: **Wezwij ponownie** / **Anuluj wezwanie**.
   Osoby wezwanej przez inne stanowisko nie można przejąć, dopóki nie potwierdzi.
-- Terminal: ekran „PODEJDŹ DO: KONT_12”, alarm na pełnej głośności i wibracja do naciśnięcia **IDĘ**.
+- Terminal: ekran „PODEJDŹ DO: KONTR_12”, alarm na pełnej głośności i wibracja do naciśnięcia **IDĘ**.
   Niepotwierdzone wezwanie wygasa po 5 min.
 
 ## Dziennik

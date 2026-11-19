@@ -46,8 +46,8 @@ class SettingsActivity : Activity() {
         }
         val server = field("Adres serwera", prefs.server, "np. 192.168.1.20:8080", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         val key = field("Klucz urządzenia", prefs.key, "z panelu serwera (/admin)")
-        val stationLabel = text("Nazwa stołu (jak w EasyStorage, np. KONT_12)", 16f, true)
-        val station = EditText(this).apply { setText(prefs.station); hint = "np. KONT_12"; textSize = 18f; isSingleLine = true
+        val stationLabel = text("Nazwa stołu (jak w EasyStorage, np. KONTR_12)", 16f, true)
+        val station = EditText(this).apply { setText(prefs.station); hint = "np. KONTR_12"; textSize = 18f; isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
         root.addView(stationLabel, lp(top = dp(16))); root.addView(station)
         fun refreshStation() { val t = group.checkedRadioButtonId == ID_TABLET; stationLabel.gone(!t); station.gone(!t) }
