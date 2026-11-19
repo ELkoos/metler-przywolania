@@ -5,6 +5,10 @@ plugins {
 
 val appVersionName = (project.findProperty("appVersionName") as String?) ?: "1.0.0"
 val appVersionCode = ((project.findProperty("appVersionCode") as String?) ?: "1").toInt()
+// Wariant "bez konfiguracji" (np. do wgrania przez MDM): adres serwera i klucz wpisane w APK.
+// Podawane tylko przy budowie lokalnej (-PdefaultServer=... -PdefaultKey=...), nigdy w repozytorium.
+val defaultServer = (project.findProperty("defaultServer") as String?) ?: ""
+val defaultKey = (project.findProperty("defaultKey") as String?) ?: ""
 
 android {
     namespace = "pl.metler.przywolania"
@@ -16,6 +20,11 @@ android {
         targetSdk = 34
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("String", "DEFAULT_SERVER", "\"${defaultServer.replace("\"", "")}\"")
+        buildConfigField("String", "DEFAULT_KEY", "\"${defaultKey.replace("\"", "")}\"")
+    }
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {

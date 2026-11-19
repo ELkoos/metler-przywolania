@@ -25,10 +25,11 @@ type Config struct {
 }
 
 type Store struct {
-	mu      sync.RWMutex
-	dir     string
-	workers []Worker
-	Config  Config
+	mu       sync.RWMutex
+	dir      string
+	workers  []Worker
+	stations map[string]string // ID tabletu -> nazwa stołu (np. KONTR_12)
+	Config   Config
 }
 
 func randHex(n int) string {
@@ -48,6 +49,18 @@ func OpenStore(dir string) (*Store, bool, error) {
 		if err := json.Unmarshal(b, &s.Config); err != nil {
 			return nil, false, errors.New("config.json: " + err.Error())
 		}
+		// brakujące pola (np. plik przygotowany ręcznie tylko z kluczem) uzupełniamy
+		if s.Config.AdminPassword == "" || s.Config.DeviceKey == "" {
+			if s.Config.AdminPassword == "" {
+				s.Config.AdminPassword = randHex(6)
+			}
+			if s.Config.DeviceKey == "" {
+				s.Config.DeviceKey = randHex(4)
+			}
+			if err := writeJSON(cfgPath, s.Config); err != nil {
+				return nil, false, err
+			}
+		}
 	} else if os.IsNotExist(err) {
 		s.Config = Config{AdminPassword: randHex(6), DeviceKey: randHex(4)}
 		if err := writeJSON(cfgPath, s.Config); err != nil {
@@ -56,6 +69,12 @@ func OpenStore(dir string) (*Store, bool, error) {
 		created = true
 	} else {
 		return nil, false, err
+	}
+	s.stations = map[string]string{}
+	if b, err := os.ReadFile(filepath.Join(dir, "stoly.json")); err == nil {
+		if err := json.Unmarshal(b, &s.stations); err != nil {
+			return nil, false, errors.New("stoly.json: " + err.Error())
+		}
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "workers.json")); err == nil {
 		if err := json.Unmarshal(b, &s.workers); err != nil {
@@ -178,4 +197,43 @@ func (s *Store) Delete(id string) error {
 		}
 	}
 	return nil
+}
+
+// NormalizeStation: wielkie litery, spacje na "_" (np. "kontr 12" -> "KONTR_12").
+func NormalizeStation(n string) string {
+	return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(n)), " ", "_")
+}
+
+// Station zwraca nazwę stołu przypisaną do tabletu (pusta, gdy brak).
+func (s *Store) Station(device string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.stations[device]
+}
+
+// SetStation przypisuje stół do tabletu; pusta nazwa usuwa przypisanie.
+func (s *Store) SetStation(device, name string) error {
+	if device == "" {
+		return errors.New("Brak ID tabletu")
+	}
+	name = NormalizeStation(name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if name == "" {
+		delete(s.stations, device)
+	} else {
+		s.stations[device] = name
+	}
+	return writeJSON(filepath.Join(s.dir, "stoly.json"), s.stations)
+}
+
+// Stations zwraca kopię przypisań.
+func (s *Store) Stations() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.stations))
+	for k, v := range s.stations {
+		out[k] = v
+	}
+	return out
 }

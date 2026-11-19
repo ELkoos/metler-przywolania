@@ -45,16 +45,25 @@ func wsHandler(h *Hub, store *Store) http.HandlerFunc {
 			http.Error(w, "zla rola", http.StatusBadRequest)
 			return
 		}
-		station := strings.TrimSpace(q.Get("station"))
-		if role == "tablet" && station == "" {
-			http.Error(w, "brak nazwy stanowiska", http.StatusBadRequest)
-			return
+		device := strings.TrimSpace(q.Get("device"))
+		station := NormalizeStation(q.Get("station"))
+		if role == "tablet" {
+			if device == "" {
+				http.Error(w, "brak ID urzadzenia", http.StatusBadRequest)
+				return
+			}
+			// przypisanie z panelu ma pierwszeństwo; nazwa wpisana na tablecie zostaje zapamiętana, gdy brak przypisania
+			if assigned := store.Station(device); assigned != "" {
+				station = assigned
+			} else if station != "" {
+				_ = store.SetStation(device, station)
+			}
 		}
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 		if err != nil {
 			return
 		}
-		c := &Client{Role: role, Station: station, Device: q.Get("device"), Remote: r.RemoteAddr, send: make(chan []byte, 64)}
+		c := &Client{Role: role, Station: station, Device: device, Remote: r.RemoteAddr, send: make(chan []byte, 64)}
 		log.Printf("polaczono: %s %s %s %s", role, station, c.Device, c.Remote)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()

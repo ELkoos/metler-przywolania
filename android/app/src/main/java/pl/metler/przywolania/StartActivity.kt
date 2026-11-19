@@ -8,6 +8,7 @@ class StartActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = Prefs(this)
+        prefs.seedDefaults()
         if (!prefs.configured) {
             startActivity(Intent(this, SettingsActivity::class.java))
         } else {

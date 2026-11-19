@@ -46,7 +46,7 @@ class SettingsActivity : Activity() {
         }
         val server = field("Adres serwera", prefs.server, "np. 192.168.1.20:8080", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         val key = field("Klucz urządzenia", prefs.key, "z panelu serwera (/admin)")
-        val stationLabel = text("Nazwa stołu (np. KONTR_12)", 16f, true)
+        val stationLabel = text("Nazwa stołu (puste = nadaje panel serwera)", 16f, true)
         val station = EditText(this).apply { setText(prefs.station); hint = "np. KONTR_12"; textSize = 18f; isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
         root.addView(stationLabel, lp(top = dp(16))); root.addView(station)
@@ -59,7 +59,7 @@ class SettingsActivity : Activity() {
 
         root.addView(bigButton("Zapisz i uruchom", C.ORANGE) {
             val mode = when (group.checkedRadioButtonId) { ID_TABLET -> Prefs.MODE_TABLET; ID_TERMINAL -> Prefs.MODE_TERMINAL; else -> "" }
-            if (mode.isEmpty() || server.text.isBlank() || key.text.isBlank() || (mode == Prefs.MODE_TABLET && station.text.isBlank())) {
+            if (mode.isEmpty() || server.text.isBlank() || key.text.isBlank()) {
                 Toast.makeText(this, "Uzupełnij wszystkie pola", Toast.LENGTH_LONG).show()
                 return@bigButton
             }

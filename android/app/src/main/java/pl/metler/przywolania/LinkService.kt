@@ -206,6 +206,13 @@ class LinkService : Service() {
                 val offset = m.optLong("now", System.currentTimeMillis()) - System.currentTimeMillis()
                 AppState.update { tabletWorkers = list; serverTimeOffset = offset }
             }
+            "station" -> {
+                // nazwa stołu nadana w panelu serwera
+                val name = m.optString("name")
+                if (name != prefs.station) prefs.station = name
+                AppState.update { }
+                updateStatusNotification()
+            }
             "call_result" -> {
                 val msg = if (!m.optBoolean("ok")) m.optString("reason") else m.optString("warning")
                 if (msg.isNotEmpty()) AppState.update { toast = msg }
@@ -296,7 +303,7 @@ class LinkService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return Notification.Builder(this, CH_STATUS)
             .setSmallIcon(R.drawable.ic_notif)
-            .setContentTitle(if (prefs.mode == Prefs.MODE_TABLET) "Przywołania – ${prefs.station}" else "Przywołania")
+            .setContentTitle(if (prefs.mode == Prefs.MODE_TABLET) "Przywołania – ${prefs.station.ifEmpty { "bez stołu" }}" else "Przywołania")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(pi)

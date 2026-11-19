@@ -111,7 +111,7 @@ func TestFlow(t *testing.T) {
 	tab1.send(map[string]any{"t": "call", "worker": anna})
 	tab1.wait("call_result", func(m map[string]any) bool { return m["ok"] == true })
 	call := term.wait("call", nil)
-	if call["station"] != "Stanowisko 1" {
+	if call["station"] != "STANOWISKO_1" {
 		t.Fatalf("stanowisko: %v", call["station"])
 	}
 	tab2.wait("state", func(m map[string]any) bool { return statusOf(m, "Anna Nowak") == "wezwany" })
@@ -143,4 +143,46 @@ func TestFlow(t *testing.T) {
 	// wylogowanie: znika z tabletów
 	term.send(map[string]any{"t": "logout"})
 	tab2.wait("state", func(m map[string]any) bool { return statusOf(m, "Anna Nowak") == "" })
+}
+
+func TestStationAssignment(t *testing.T) {
+	store, _, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.Upsert("", "Anna Nowak", "")
+	hub := NewHub(store, NewCallLog(store.dir))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wsHandler(hub, store))
+	adminRoutes(mux, hub, store)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	key := store.Config.DeviceKey
+
+	// tablet bez nazwy: łączy się, ale nie może wzywać
+	tab := dial(t, srv.URL, url.Values{"role": {"tablet"}, "key": {key}, "device": {"T1"}})
+	if m := tab.wait("station", nil); m["name"] != "" {
+		t.Fatalf("oczekiwano pustego stołu: %v", m)
+	}
+	tab.send(map[string]any{"t": "call", "worker": store.Workers()[0].ID})
+	tab.wait("call_result", func(m map[string]any) bool { return m["ok"] == false })
+
+	// przypisanie w panelu dociera do połączonego tabletu
+	form := url.Values{"action": {"station"}, "device": {"T1"}, "name": {"kontr 12"}}
+	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("x", store.Config.AdminPassword)
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Do(req)
+	if err != nil || resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("panel: %v %v", err, resp)
+	}
+	tab.wait("station", func(m map[string]any) bool { return m["name"] == "KONTR_12" })
+
+	// po ponownym połączeniu przypisanie z panelu wygrywa z nazwą wpisaną lokalnie
+	tab2 := dial(t, srv.URL, url.Values{"role": {"tablet"}, "key": {key}, "device": {"T1"}, "station": {"INNY"}})
+	tab2.wait("station", func(m map[string]any) bool { return m["name"] == "KONTR_12" })
+	if got := store.Station("T1"); got != "KONTR_12" {
+		t.Fatalf("zapis: %q", got)
+	}
 }

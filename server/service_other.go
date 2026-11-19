@@ -2,5 +2,5 @@
 
 package main
 
-func serviceUsage()                          {}
+func serviceUsage()                           {}
 func serviceMain(args []string) (bool, error) { return false, nil }

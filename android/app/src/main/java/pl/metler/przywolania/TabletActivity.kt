@@ -21,6 +21,8 @@ class TabletActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var grid: GridLayout
     private lateinit var empty: TextView
+    private lateinit var title: TextView
+    private lateinit var perms: LinearLayout
     private val ticker = Handler(Looper.getMainLooper())
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable {
@@ -38,7 +40,10 @@ class TabletActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val (bar, st) = header(prefs.station) { openSettingsProtected() }
         status = st
+        title = (bar.getChildAt(0) as LinearLayout).getChildAt(0) as TextView
         root.addView(bar)
+        perms = vbox(0).apply { setPadding(dp(16), 0, dp(16), 0) }
+        root.addView(perms)
         val hint = text("Dotknij osobę, aby wezwać ją do stanowiska. Dotknij ponownie, aby anulować.", 14f, color = C.MUTED)
         hint.setPadding(dp(16), dp(10), dp(16), 0)
         root.addView(hint)
@@ -50,6 +55,8 @@ class TabletActivity : Activity() {
         root.addView(ScrollView(this).apply { addView(grid) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
+
+    override fun onResume() { super.onResume(); render() }
 
     override fun onStart() {
         super.onStart()
@@ -78,7 +85,15 @@ class TabletActivity : Activity() {
     private fun render() {
         val t = AppState.takeToast()
         if (t.isNotEmpty()) Toast.makeText(this, t, Toast.LENGTH_LONG).show()
-        status.text = if (AppState.connected) "Połączono z serwerem" else "⚠ " + AppState.connectError.ifEmpty { "Łączenie…" }
+        perms.removeAllViews()
+        for (p in permIssues(terminal = false)) {
+            perms.addView(bigButton("⚠ Włącz: ${p.label}", C.ORANGE) { p.fix(this) }, lp(top = dp(8)))
+        }
+        val noStation = prefs.station.isEmpty()
+        title.text = if (noStation) "Tablet bez stołu" else prefs.station
+        status.text = if (!AppState.connected) "⚠ " + AppState.connectError.ifEmpty { "Łączenie…" }
+            else if (noStation) "Przypisz stół w panelu serwera · ID tabletu ${prefs.deviceId}"
+            else "Połączono z serwerem"
         val list = AppState.tabletWorkers
         empty.gone(list.isNotEmpty() || !AppState.connected)
         val cols = columns()

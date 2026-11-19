@@ -32,6 +32,8 @@ class TerminalActivity : Activity() {
         setContentView(root)
     }
 
+    override fun onResume() { super.onResume(); render() }
+
     override fun onStart() {
         super.onStart()
         LinkService.start(this)
@@ -49,6 +51,9 @@ class TerminalActivity : Activity() {
         if (t.isNotEmpty()) Toast.makeText(this, t, Toast.LENGTH_LONG).show()
         status.text = if (AppState.connected) "Połączono z serwerem" else "⚠ " + AppState.connectError.ifEmpty { "Łączenie…" }
         body.removeAllViews()
+        for (p in permIssues(terminal = true)) {
+            body.addView(bigButton("⚠ Włącz: ${p.label}", C.ORANGE) { p.fix(this) }, lp(top = dp(8)))
+        }
         if (AppState.activeCall != null) {
             body.addView(bigButton("Wezwanie: ${AppState.activeCall?.station} – otwórz", C.ORANGE) {
                 startActivity(Intent(this, CallActivity::class.java))

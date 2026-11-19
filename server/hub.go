@@ -6,17 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
 
 // Czasy działania wezwań.
 var (
-	ackTimeout     = 60 * time.Second  // po tym czasie bez potwierdzenia: status "brak odpowiedzi"
-	callExpire     = 5 * time.Minute   // po tym czasie niepotwierdzone wezwanie wygasa
-	comingDuration = 3 * time.Minute   // jak długo po potwierdzeniu tablet pokazuje "idzie"
-	offlineGrace   = 10 * time.Minute  // jak długo po utracie połączenia pracownik zostaje na liście (szary)
+	ackTimeout     = 60 * time.Second // po tym czasie bez potwierdzenia: status "brak odpowiedzi"
+	callExpire     = 5 * time.Minute  // po tym czasie niepotwierdzone wezwanie wygasa
+	comingDuration = 3 * time.Minute  // jak długo po potwierdzeniu tablet pokazuje "idzie"
+	offlineGrace   = 10 * time.Minute // jak długo po utracie połączenia pracownik zostaje na liście (szary)
 )
 
 type Call struct {
@@ -164,6 +166,7 @@ func (h *Hub) Register(c *Client) {
 	defer h.mu.Unlock()
 	h.clients[c] = true
 	if c.Role == "tablet" {
+		c.Send(map[string]any{"t": "station", "name": c.Station, "device": c.Device})
 		c.Send(map[string]any{"t": "state", "workers": h.stateLocked(), "now": time.Now().UnixMilli()})
 	} else {
 		c.Send(map[string]any{"t": "workers", "list": h.store.PublicWorkers()})
@@ -282,6 +285,10 @@ func (h *Hub) handleTerminal(c *Client, m inMsg) {
 func (h *Hub) handleTablet(c *Client, m inMsg) {
 	switch m.T {
 	case "call":
+		if c.Station == "" {
+			c.Send(map[string]any{"t": "call_result", "ok": false, "worker": m.Worker, "reason": "Tablet nie ma przypisanego stołu (panel serwera)"})
+			return
+		}
 		s := h.sessions[m.Worker]
 		if s == nil {
 			c.Send(map[string]any{"t": "call_result", "ok": false, "worker": m.Worker, "reason": "Pracownik nie jest zalogowany"})
@@ -318,3 +325,95 @@ func (h *Hub) handleTablet(c *Client, m inMsg) {
 }
 
 func init() { log.SetFlags(log.LstdFlags) }
+
+// StationChanged ustawia nową nazwę stołu połączonym tabletom o danym ID.
+func (h *Hub) StationChanged(device, name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.clients {
+		if c.Role == "tablet" && c.Device == device {
+			c.Station = name
+			c.Send(map[string]any{"t": "station", "name": name, "device": device})
+		}
+	}
+}
+
+type TabletInfo struct {
+	Device  string `json:"device"`
+	Station string `json:"station"`
+	IP      string `json:"ip"`
+	Online  bool   `json:"online"`
+}
+
+// Tablets: wszystkie znane tablety (przypisane i połączone).
+func (h *Hub) Tablets() []TabletInfo {
+	assigned := h.store.Stations()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	byDev := map[string]*TabletInfo{}
+	for d, n := range assigned {
+		byDev[d] = &TabletInfo{Device: d, Station: n}
+	}
+	for c := range h.clients {
+		if c.Role != "tablet" {
+			continue
+		}
+		t := byDev[c.Device]
+		if t == nil {
+			t = &TabletInfo{Device: c.Device}
+			byDev[c.Device] = t
+		}
+		t.Online = true
+		t.IP = c.Remote
+		if host, _, err := net.SplitHostPort(c.Remote); err == nil {
+			t.IP = host
+		}
+		t.Station = c.Station
+	}
+	out := make([]TabletInfo, 0, len(byDev))
+	for _, t := range byDev {
+		out = append(out, *t)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Station != out[j].Station {
+			return naturalLess(out[i].Station, out[j].Station)
+		}
+		return out[i].Device < out[j].Device
+	})
+	return out
+}
+
+// naturalLess sortuje KONTR_2 przed KONTR_10; puste nazwy na końcu.
+func naturalLess(a, b string) bool {
+	if a == "" || b == "" {
+		return b == "" && a != ""
+	}
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		ca, cb := a[i], b[j]
+		if ca >= '0' && ca <= '9' && cb >= '0' && cb <= '9' {
+			si := i
+			for i < len(a) && a[i] >= '0' && a[i] <= '9' {
+				i++
+			}
+			sj := j
+			for j < len(b) && b[j] >= '0' && b[j] <= '9' {
+				j++
+			}
+			na, nb := strings.TrimLeft(a[si:i], "0"), strings.TrimLeft(b[sj:j], "0")
+			if len(na) != len(nb) {
+				return len(na) < len(nb)
+			}
+			if na != nb {
+				return na < nb
+			}
+			continue
+		}
+		if ca != cb {
+			return ca < cb
+		}
+		i++
+		j++
+	}
+	return len(a)-i < len(b)-j
+}

@@ -43,6 +43,7 @@ Gotowe pliki: zakładka **Actions** → ostatnia budowa → Artifacts. Po oznacz
 ### Pierwsze uruchomienie
 
 Serwer tworzy `dane/config.json` z hasłem do panelu i kluczem urządzeń (widoczne też w `dane/serwer.log`).
+Można też przed startem wgrać własny `dane/config.json` (`{"adminPassword":"…","deviceKey":"…"}`); brakujące pole serwer uzupełni.
 Panel: `http://ADRES-SERWERA:8080/admin` (użytkownik dowolny, hasło z `config.json`).
 W panelu dodaj pracowników (imię i nazwisko, opcjonalnie PIN) i odczytaj **klucz urządzeń**.
 
@@ -53,9 +54,29 @@ Serwer powinien mieć stały adres IP (rezerwacja DHCP). Tablety i terminale mus
 
 Instalacja z pliku `przywolania.apk` (zgoda na instalację z nieznanych źródeł) albo przez MDM.
 
-Przy pierwszym uruchomieniu ekran **Ustawienia**:
+### Bez ręcznej konfiguracji (wgrywanie przez MDM)
 
-- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu (np. `KONTR_12`; wielkie litery i `_` ustawiane automatycznie).
+MDM zwykle nie przekaże ustawień aplikacji instalowanej z pliku APK, dlatego adres serwera i klucz można wpisać w APK przy budowie:
+
+```
+cd android && ./gradlew assembleRelease -PdefaultServer=192.168.x.x:8080 -PdefaultKey=KLUCZ -PappVersionCode=N
+```
+
+Taki APK po pierwszym uruchomieniu sam zapisuje adres i klucz oraz wybiera tryb po ekranie
+(najkrótszy bok ≥ 600 dp = tablet, mniejszy = terminal). Ustawienia przetrwają późniejszą aktualizację zwykłym APK.
+Plik z kluczem nie powinien trafiać do publicznych wydań.
+
+### Stoły przypisywane w panelu
+
+Każdy tablet ma swoje ID (widoczne w ustawieniach i na górnym pasku, dopóki nie ma stołu). W panelu `/admin`, sekcja
+**Tablety i stoły**, wpisz nazwę stołu (np. `KONTR_12`) i zapisz: tablet przełączy się od razu. Przypisania są w `dane/stoly.json`.
+Przypisanie z panelu ma pierwszeństwo przed nazwą wpisaną na tablecie. Tablet bez stołu widzi pracowników, ale nie może wzywać.
+
+### Ustawienia ręczne
+
+Przy pierwszym uruchomieniu zwykłego APK ekran **Ustawienia**:
+
+- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu (opcjonalnie; puste = nadaje panel).
 - **Terminal**: tryb „Terminal pracownika”, adres serwera, klucz urządzeń. Na liście uprawnień dotknij każdej pozycji z ✗:
   powiadomienia, praca w tle bez ograniczeń baterii, **wyświetlanie nad innymi aplikacjami** (ekran wezwania pojawia się nad innymi aplikacjami),
   powiadomienia pełnoekranowe (Android 14+).
@@ -90,7 +111,7 @@ Protokół (WebSocket `/ws?role=tablet|terminal&key=…&device=…&station=…`,
 | terminal | `{"t":"login","worker":"id","pin":"1234"}`, `{"t":"logout"}`, `{"t":"ack","id":"…"}` |
 | tablet | `{"t":"call","worker":"id"}`, `{"t":"cancel","worker":"id"}` |
 | serwer → terminal | `workers`, `login_ok`, `login_err`, `logged_out`, `call`, `call_cancel` |
-| serwer → tablet | `state` (lista zalogowanych ze statusem), `call_result` |
+| serwer → tablet | `station` (nazwa stołu z panelu), `state` (lista zalogowanych ze statusem), `call_result` |
 
 Podpis APK: budowa używa sekretów `ANDROID_KEYSTORE_BASE64` i `ANDROID_KEYSTORE_PASSWORD`, a gdy ich nie ma, pliku
 `android/keystore/przywolania.jks` + `haslo.txt`. Bez stałego klucza każda budowa ma inny podpis i nowej wersji

@@ -26,6 +26,7 @@ func requireAdmin(store *Store, next http.HandlerFunc) http.HandlerFunc {
 }
 
 func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
+	hub := h
 	mux.HandleFunc("/admin", requireAdmin(store, func(w http.ResponseWriter, r *http.Request) {
 		msg := ""
 		if r.Method == http.MethodPost {
@@ -36,6 +37,13 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 				err = store.Upsert(r.FormValue("id"), r.FormValue("name"), r.FormValue("pin"))
 			case "delete":
 				err = store.Delete(r.FormValue("id"))
+			case "station":
+				dev := r.FormValue("device")
+				if err = store.SetStation(dev, r.FormValue("name")); err == nil {
+					hub.StationChanged(dev, store.Station(dev))
+					http.Redirect(w, r, "/admin", http.StatusSeeOther)
+					return
+				}
 			}
 			if err != nil {
 				msg = err.Error()
@@ -48,19 +56,18 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = adminTpl.Execute(w, map[string]any{
 			"Workers":   store.Workers(),
+			"Tablets":   h.Tablets(),
 			"DeviceKey": store.Config.DeviceKey,
 			"Msg":       msg,
 			"Version":   version,
 		})
 	}))
 	mux.HandleFunc("/admin/stan", requireAdmin(store, func(w http.ResponseWriter, r *http.Request) {
-		h.mu.Lock()
-		tablets := []map[string]string{}
+		tablets := h.Tablets()
 		terminals := 0
+		h.mu.Lock()
 		for c := range h.clients {
-			if c.Role == "tablet" {
-				tablets = append(tablets, map[string]string{"station": c.Station, "device": c.Device, "ip": c.Remote})
-			} else {
+			if c.Role == "terminal" {
 				terminals++
 			}
 		}
