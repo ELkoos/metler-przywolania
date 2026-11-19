@@ -63,6 +63,9 @@ class SettingsActivity : Activity() {
                 return@bigButton
             }
             val modeChanged = mode != prefs.mode
+            if (prefs.mode == Prefs.MODE_TERMINAL && prefs.workerId.isNotEmpty() && (modeChanged || server.text.toString().trim() != prefs.server)) {
+                LinkService.send(org.json.JSONObject().put("t", "logout"))
+            }
             prefs.mode = mode
             prefs.server = server.text.toString().trim()
             prefs.key = key.text.toString().trim()

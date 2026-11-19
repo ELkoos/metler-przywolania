@@ -24,7 +24,11 @@ class TabletActivity : Activity() {
     private val ticker = Handler(Looper.getMainLooper())
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable {
-        override fun run() { render(); ticker.postDelayed(this, 1000) }
+        override fun run() {
+            // odświeżanie licznika czasu tylko, gdy ktoś czeka na potwierdzenie
+            if (AppState.tabletWorkers.any { it.status == "wezwany" || it.status == "brak_odpowiedzi" }) render()
+            ticker.postDelayed(this, 1000)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +55,7 @@ class TabletActivity : Activity() {
         super.onStart()
         LinkService.start(this)
         AppState.listen(listener)
+        render()
         ticker.post(tick)
     }
 
