@@ -1,0 +1,13 @@
+# Synology DS1525+: Container Manager -> Projekt -> Utwórz, wskaż ten plik.
+# Dane (pracownicy, hasła, dziennik zdarzeń) w folderze ./dane obok tego pliku.
+services:
+  przywolania:
+    image: ghcr.io/elkoos/metler-przywolania-serwer:latest
+    container_name: przywolania
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Europe/Warsaw
+    volumes:
+      - ./dane:/data
