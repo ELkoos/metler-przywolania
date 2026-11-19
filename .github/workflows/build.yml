@@ -83,9 +83,12 @@ jobs:
             echo "ANDROID_KEY_PASSWORD=$P" >> $GITHUB_ENV
             echo "ANDROID_KEY_ALIAS=przywolania" >> $GITHUB_ENV
           else
-            echo "::warning::Brak klucza podpisu - APK podpisany kluczem debug (kazda budowa inny podpis)"
-            mkdir -p ~/.android
-            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            echo "::warning::Brak sekretow klucza podpisu - APK podpisany kluczem tymczasowym (kazda budowa inny podpis)"
+            keytool -genkeypair -keystore "$RUNNER_TEMP/tmp.jks" -storepass tymczasowy -keypass tymczasowy -alias przywolania -keyalg RSA -validity 10000 -dname "CN=Przywolania test,C=PL"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/tmp.jks" >> $GITHUB_ENV
+            echo "ANDROID_KEYSTORE_PASSWORD=tymczasowy" >> $GITHUB_ENV
+            echo "ANDROID_KEY_PASSWORD=tymczasowy" >> $GITHUB_ENV
+            echo "ANDROID_KEY_ALIAS=przywolania" >> $GITHUB_ENV
           fi
       - name: Budowa APK
         working-directory: android
