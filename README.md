@@ -17,6 +17,7 @@ Działa w sieci lokalnej magazynu. Nie wymaga usług Google (FCM) ani internetu,
 | Folder | Co to jest |
 |---|---|
 | `server/` | Serwer (Go, jeden plik). Pracownicy, logowanie PIN, wezwania, panel `/admin`, dziennik zdarzeń CSV. |
+| `zwroty/` | Osobna aplikacja: skanowanie paczek zwrotnych, dopasowanie do zwrotów Allegro i Base, alerty o zwrocie środków. Opis w `zwroty/README.md`. |
 | `android/` | Jedna aplikacja Android (od 8.0) z dwoma trybami: **Tablet** (stanowisko) i **Terminal** (pracownik). |
 | `.github/workflows/build.yml` | Budowa: testy serwera, `przywolania-serwer.exe`, binarka Linux, obraz Docker (ghcr.io), `przywolania.apk`. |
 

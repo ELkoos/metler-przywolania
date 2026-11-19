@@ -1,0 +1,13 @@
+# Synology DS1525+: Container Manager -> Projekt -> Utwórz, wskaż ten plik.
+# Dane (ustawienia, tokeny, skany) w folderze ./dane obok tego pliku.
+services:
+  zwroty:
+    image: ghcr.io/elkoos/metler-zwroty-serwer:latest
+    container_name: zwroty
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - TZ=Europe/Warsaw
+    volumes:
+      - ./dane:/data

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zwroty – panel</title>
+<style>body{font:15px/1.45 system-ui,Segoe UI,Arial,sans-serif;max-width:900px;margin:0 auto;padding:16px;color:#1d2330;background:#f4f5f7}
+fieldset{background:#fff;border:1px solid #d9dde3;border-radius:8px;margin:0 0 16px;padding:12px 16px}legend{font-weight:700}
+label{display:block;margin:8px 0}input,select,textarea{font-size:15px;padding:5px 7px}input[type=text],input[type=password],textarea{width:100%}
+.msg{padding:10px;background:#e6f4ea;border:1px solid #1a7f37;border-radius:6px}.dev{padding:12px;background:#fff4e0;border:1px solid #a15c00;border-radius:6px;margin-bottom:16px}
+.mut{color:#667085;font-size:13px}table{border-collapse:collapse}td{padding:4px 10px 4px 0}button{font-size:15px;padding:6px 14px;cursor:pointer}</style></head>
+<body>
+<p><a href="/">← Skanowanie</a> · wersja {{.Version}}</p>
+{{if .Msg}}<p class="msg">{{.Msg}}</p>{{end}}
+{{if .Device}}<div class="dev"><b>Dodawanie konta „{{.Device.Name}}”.</b> Otwórz ten link w przeglądarce, w której jesteś zalogowany na TO konto Allegro, i potwierdź:<br>
+<a href="{{.Device.VerificationURIComplete}}" target="_blank">{{.Device.VerificationURIComplete}}</a> (kod {{.Device.UserCode}})<br>
+Stan: <b id="dstan">czekam na potwierdzenie…</b></div>
+<script>(function poll(){fetch("/admin/konto-stan?kod={{.Device.UserCode}}").then(r=>r.json()).then(j=>{if(j.state==="czeka"){setTimeout(poll,4000)}else{document.getElementById("dstan").textContent=j.state==="ok"?"Konto dodane. Odśwież stronę.":"Błąd: "+j.msg}})})()</script>{{end}}
+
+<form method="post"><input type="hidden" name="action" value="ustawienia">
+<fieldset><legend>Allegro – aplikacja</legend>
+<p class="mut">Aplikację rejestruje się na apps.developer.allegro.pl z zaznaczoną opcją „Aplikacja będzie działać w środowisku bez dostępu do przeglądarki albo klawiatury…”. Potrzebne uprawnienia: odczyt zamówień (allegro:api:orders:read) i płatności (allegro:api:payments:read).</p>
+<label>Client ID <input type="text" name="clientId" value="{{.C.AllegroClientID}}"></label>
+<label>Client Secret {{if .SecretSet}}<span class="mut">(ustawiony – zostaw puste, aby nie zmieniać)</span>{{end}} <input type="password" name="clientSecret" autocomplete="off"></label>
+</fieldset>
+<fieldset><legend>Base</legend>
+<label>Token API {{if .BaseSet}}<span class="mut">(ustawiony – zostaw puste, aby nie zmieniać)</span>{{end}} <input type="password" name="baseToken" autocomplete="off"></label>
+{{if .BaseSet}}<label><input type="checkbox" name="baseOff" value="1"> wyłącz odczyt z Base (usuń token)</label>{{end}}
+<p class="mut">Aplikacja tylko czyta zwroty (getOrderReturns), sekwencyjnie, min. 1 s między zapytaniami.</p>
+</fieldset>
+<fieldset><legend>Osoby skanujące (jedna w wierszu)</legend>
+<textarea name="workers" rows="5">{{range .C.Workers}}{{.}}
+{{end}}</textarea></fieldset>
+<fieldset><legend>Synchronizacja i alerty</legend>
+<label>Synchronizacja co <input type="number" name="syncMinutes" value="{{.C.SyncMinutes}}" min="5" style="width:80px"> min</label>
+<label>Pobieraj zwroty z ostatnich <input type="number" name="historyDays" value="{{.C.HistoryDays}}" min="7" style="width:80px"> dni</label>
+<label>Alert „brak zwrotu środków” po <input type="number" name="refundAlertDays" value="{{.C.RefundAlertDays}}" min="0" style="width:80px"> dniach od skanu</label>
+<label>Termin zwrotu automatycznego: <input type="number" name="deadlineDays" value="{{.C.DeadlineDays}}" min="0" style="width:80px"> dni (0 = nie liczyć) od
+<select name="deadlineFrom"><option value="skan" {{if eq .C.DeadlineFrom "skan"}}selected{{end}}>skanu paczki</option><option value="doreczenie" {{if eq .C.DeadlineFrom "doreczenie"}}selected{{end}}>doręczenia wg Allegro</option></select></label>
+<label>Alert PILNE na <input type="number" name="deadlineWarnDays" value="{{.C.DeadlineWarnDays}}" min="0" style="width:80px"> dni przed terminem</label>
+<label>Alert „doręczona, niezeskanowana” po <input type="number" name="notScannedDays" value="{{.C.NotScannedDays}}" min="0" style="width:80px"> dniach</label>
+<p class="mut">„Doręczenie wg Allegro” = chwila, w której aplikacja pierwszy raz zobaczyła status DELIVERED (API Allegro nie podaje tej daty).</p>
+</fieldset>
+<button>Zapisz ustawienia</button>
+</form>
+
+<fieldset style="margin-top:16px"><legend>Konta Allegro</legend>
+<table>{{range .C.AllegroAccounts}}<tr><td>{{.Name}}</td><td><form method="post" style="display:inline"><input type="hidden" name="action" value="usun-konto"><input type="hidden" name="name" value="{{.Name}}"><button>Usuń</button></form></td></tr>{{else}}<tr><td class="mut">Brak kont.</td></tr>{{end}}</table>
+<form method="post"><input type="hidden" name="action" value="dodaj-konto"><label>Nazwa nowego konta (np. login Allegro) <input type="text" name="name"></label><button>Dodaj konto</button></form>
+</fieldset>
+<form method="post"><input type="hidden" name="action" value="synchronizuj"><button>Synchronizuj teraz</button></form>
+</body></html>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zwroty – skanowanie</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--txt:#1d2330;--mut:#667085;--line:#d9dde3;--ok:#1a7f37;--okbg:#e6f4ea;--bad:#c62828;--badbg:#fdecea;--warn:#a15c00;--warnbg:#fff4e0;--acc:#0b5cad}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;font:15px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:#1d2330;color:#fff}
+header h1{font-size:18px;margin:0 12px 0 0}header select{font-size:15px;padding:4px 6px}
+nav{display:flex;gap:4px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line)}
+nav button{border:0;background:none;padding:12px 14px;font-size:15px;cursor:pointer;border-bottom:3px solid transparent}
+nav button.on{border-color:var(--acc);font-weight:600}.cnt{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--bad);color:#fff;font-size:12px;text-align:center}
+main{padding:16px;max-width:1200px;margin:0 auto}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.batches{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.batches button{padding:8px 14px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-size:15px}
+.batches button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#code{width:100%;font-size:28px;padding:12px;border:2px solid var(--acc);border-radius:8px;letter-spacing:1px}
+#wynik{font-size:18px}#wynik.ok{background:var(--okbg);border-color:var(--ok)}#wynik.bad{background:var(--badbg);border-color:var(--bad)}#wynik.warn{background:var(--warnbg);border-color:var(--warn)}
+#wynik .big{font-size:24px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.t-ok{background:var(--okbg);color:var(--ok)}.t-bad{background:var(--badbg);color:var(--bad)}.t-warn{background:var(--warnbg);color:var(--warn)}.t-info{background:#eef2f6;color:var(--mut)}
+.mut{color:var(--mut)}.err{color:var(--bad)}input.small{padding:4px 6px;font-size:14px;width:160px}button.small{padding:4px 10px;font-size:14px;cursor:pointer}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Zwroty</h1>
+  <label>Skanuje: <select id="worker"><option value="">– wybierz –</option></select></label>
+  <span id="sync" class="mut" style="margin-left:auto;color:#c9ced8"></span>
+</header>
+<nav>
+  <button data-t="skan" class="on">Skanowanie</button>
+  <button data-t="wyj">Do wyjaśnienia <span id="cWyj" class="cnt" hidden></span></button>
+  <button data-t="alerty">Alerty <span id="cAl" class="cnt" hidden></span></button>
+  <button data-t="hist">Historia i eksport</button>
+</nav>
+<main>
+<section id="skan" class="on">
+  <div class="card">
+    <div class="batches" id="batches"></div>
+    <input id="code" autocomplete="off" placeholder="Zeskanuj numer przesyłki…" autofocus>
+  </div>
+  <div class="card" id="wynik" hidden></div>
+  <div class="card"><b>Dzisiaj</b> <span id="dzisInfo" class="mut"></span>
+    <table><thead><tr><th>Godz.</th><th>Osoba</th><th>Partia</th><th>Numer paczki</th><th>Zwrot</th><th>Status Allegro</th><th>Środki</th><th></th></tr></thead><tbody id="dzis"></tbody></table>
+  </div>
+</section>
+<section id="wyj">
+  <div class="card"><p class="mut">Paczki, których numeru nie znaleziono w zwrotach Allegro ani Base. Aplikacja sprawdza je ponownie przy każdej synchronizacji. Możesz też wpisać numer zwrotu (np. R629/2026 albo numer zwrotu Allegro) lub samą notatkę.</p>
+  <table><thead><tr><th>Data</th><th>Osoba</th><th>Partia</th><th>Numer paczki</th><th>Wyjaśnienie</th></tr></thead><tbody id="wyjT"></tbody></table></div>
+</section>
+<section id="alerty">
+  <div class="card"><p class="mut" id="alInfo"></p>
+  <table><thead><tr><th>Poziom</th><th>Alert</th><th>Od</th><th>Termin</th><th>Konto / nr zwrotu</th><th>Zamówienie</th><th>Kupujący</th><th>Status Allegro</th></tr></thead><tbody id="alT"></tbody></table></div>
+</section>
+<section id="hist">
+  <div class="card row">
+    <label>Pokaż ostatnie <input id="hDni" type="number" min="1" value="7" style="width:70px"> dni</label>
+    <button class="small" id="hPokaz">Pokaż</button>
+    <a id="hCsv" href="/eksport.csv?dni=7">Pobierz CSV (Excel)</a>
+  </div>
+  <div class="card"><table><thead><tr><th>Data</th><th>Osoba</th><th>Partia</th><th>Numer paczki</th><th>Zwrot</th><th>Status Allegro</th><th>Środki</th><th>Base</th></tr></thead><tbody id="histT"></tbody></table></div>
+</section>
+</main>
+<script>
+const BATCHES=["InPost","Orlen Paczka","DPD","DHL","GLS","Poczta Polska","UPS","Allegro One","Inne"];
+const AST={CREATED:"Utworzony",DISPATCHED:"Nadany",IN_TRANSIT:"W drodze",DELIVERED:"Doręczony",FINISHED:"Zakończony (zwrócono)",FINISHED_APT:"Zwrócono przez Allegro Protect",REJECTED:"Odrzucony",COMMISSION_REFUND_CLAIMED:"Wniosek o rabat prowizji",COMMISSION_REFUNDED:"Prowizja zwrócona",WAREHOUSE_DELIVERED:"W magazynie Allegro",WAREHOUSE_VERIFICATION:"Weryfikacja w magazynie"};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let batch=ls.get("partia")||BATCHES[0];
+function fmt(t){if(!t||t.startsWith("0001"))return"";const d=new Date(t);return d.toLocaleDateString("pl-PL")+" "+d.toLocaleTimeString("pl-PL",{hour:"2-digit",minute:"2-digit"})}
+function hm(t){return new Date(t).toLocaleTimeString("pl-PL",{hour:"2-digit",minute:"2-digit"})}
+async function api(u,body){const r=await fetch(u,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+let actx;function beep(ok){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=ok?880:220;o.type=ok?"sine":"square";g.gain.value=.15;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+(ok?.15:.5))}catch(e){}}
+function refundCell(a){if(!a)return"";if(a.status==="FINISHED"||a.status==="FINISHED_APT")return'<span class="tag t-ok">zwrócono</span>';if(a.refund&&a.refund.success)return'<span class="tag t-ok">zwrócono '+esc(a.refund.amount)+" "+esc(a.refund.currency)+"</span>";if(a.status==="REJECTED")return'<span class="tag t-info">odrzucony</span>';return'<span class="tag t-warn">brak zwrotu</span>'}
+function retCell(v){if(!v.allegro&&!v.base)return v.resolved?'<span class="tag t-info">wyjaśniona</span> '+esc(v.note):'<span class="tag t-bad">do wyjaśnienia</span>';
+ let s="";if(v.allegro)s+=esc(v.allegro.account)+" "+esc(v.allegro.referenceNumber);if(v.base)s+=(s?"<br>":"")+'<span class="mut">Base '+esc(v.base.referenceNumber)+"</span>";if(v.duplicate)s+=' <span class="tag t-warn">ponowny skan</span>';return s}
+function ast(a){return a?esc(AST[a.status]||a.status):""}
+// stanowisko
+$("#batches").innerHTML=BATCHES.map(b=>`<button data-b="${esc(b)}">${esc(b)}</button>`).join("");
+function drawBatch(){document.querySelectorAll("#batches button").forEach(x=>x.classList.toggle("on",x.dataset.b===batch))}
+drawBatch();$("#batches").onclick=e=>{if(e.target.dataset.b){batch=e.target.dataset.b;ls.set("partia",batch);drawBatch();$("#code").focus()}};
+$("#worker").onchange=e=>{ls.set("osoba",e.target.value);$("#code").focus()};
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button,section").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#"+b.dataset.t).classList.add("on");load(b.dataset.t);if(b.dataset.t==="skan")$("#code").focus()});
+document.addEventListener("click",e=>{if($("#skan").classList.contains("on")&&!e.target.closest("select,input,a,button"))$("#code").focus()});
+let busy=false;
+$("#code").addEventListener("keydown",async e=>{if(e.key!=="Enter")return;e.preventDefault();const code=$("#code").value.trim();if(!code||busy)return;
+ const w=$("#worker").value;const box=$("#wynik");box.hidden=false;
+ if(!w){box.className="card bad";box.innerHTML='<div class="big">Wybierz osobę skanującą (u góry)</div>';beep(false);return}
+ busy=true;$("#code").value="";box.className="card";box.textContent="Szukam "+code+"…";
+ try{const v=await api("/api/skan",{code,batch,worker:w});showResult(v);beep(!!(v.allegro||v.base))}catch(err){box.className="card bad";box.textContent="Błąd: "+err.message;beep(false)}
+ busy=false;loadToday();loadCounts();$("#code").focus()});
+function showResult(v){const box=$("#wynik");
+ if(!v.allegro&&!v.base){box.className="card bad";box.innerHTML=`<div class="big">NIE ZNALEZIONO – odłóż do wyjaśnienia</div><div>${esc(v.raw)}</div>`;return}
+ const a=v.allegro,b=v.base;let h="";
+ box.className="card "+(v.duplicate?"warn":"ok");
+ h+=`<div class="big">${v.duplicate?"PONOWNY SKAN – ":""}${a?esc(a.referenceNumber):esc(b.referenceNumber)}</div>`;
+ if(a){h+=`<div>Allegro (${esc(a.account)}): ${ast(a)} · zamówienie ${esc(a.orderId)} · ${esc(a.buyerLogin)} · ${refundCell(a)}</div><ul>`+(a.items||[]).map(i=>`<li>${esc(i.quantity)} × ${esc(i.name)} <span class="mut">${esc(i.reason)} ${esc(i.comment||"")}</span></li>`).join("")+"</ul>"}
+ if(b){h+=`<div>Base: ${esc(b.referenceNumber)} · status ${esc(v.baseStatus||b.statusId)} · zamówienie ${esc(b.orderId)} · ${esc(b.fullname)}</div>`;if(!a)h+="<ul>"+(b.products||[]).map(p=>`<li>${esc(p.quantity)} × ${esc(p.name)} <span class="mut">${esc(p.sku)} ${esc(p.ean)}</span></li>`).join("")+"</ul>"}
+ if(v.match&&v.match.includes("czesciowe"))h+='<div class="tag t-warn">dopasowanie częściowe numeru – sprawdź</div>';
+ box.innerHTML=h}
+function scanRow(v,del){return`<tr><td>${hm(v.at)}</td><td>${esc(v.worker)}</td><td>${esc(v.batch)}</td><td>${esc(v.raw)}</td><td>${retCell(v)}</td><td>${ast(v.allegro)}</td><td>${refundCell(v.allegro)}</td>${del?`<td><button class="small" data-del="${v.id}" title="Usuń błędny skan">usuń</button></td>`:""}</tr>`}
+async function loadToday(){const l=await api("/api/skany?dni=1");$("#dzis").innerHTML=l.map(v=>scanRow(v,true)).join("");$("#dzisInfo").textContent="– "+l.length+" skanów, nie znaleziono: "+l.filter(v=>!v.allegro&&!v.base&&!v.resolved).length}
+$("#dzis").onclick=async e=>{const id=e.target.dataset.del;if(!id)return;if(e.target.textContent!=="na pewno?"){e.target.textContent="na pewno?";return}await api("/api/usun-skan",{id});loadToday();loadCounts()};
+async function loadWyj(){const l=await api("/api/wyjasnienia");$("#wyjT").innerHTML=l.map(v=>`<tr><td>${fmt(v.at)}</td><td>${esc(v.worker)}</td><td>${esc(v.batch)}</td><td>${esc(v.raw)}</td><td class="row"><input class="small" placeholder="nr zwrotu" data-ref="${v.id}"><input class="small" placeholder="notatka" data-note="${v.id}"><button class="small" data-ok="${v.id}">Zapisz</button><span class="err" data-e="${v.id}"></span></td></tr>`).join("")||'<tr><td colspan="5" class="mut">Brak paczek do wyjaśnienia.</td></tr>'}
+$("#wyjT").onclick=async e=>{const id=e.target.dataset.ok;if(!id)return;try{await api("/api/wyjasnij",{id,ref:$(`[data-ref="${id}"]`).value,note:$(`[data-note="${id}"]`).value});loadWyj();loadCounts()}catch(err){$(`[data-e="${id}"]`).textContent=err.message}};
+const LV={czerwony:'<span class="tag t-bad">PILNE</span>',zolty:'<span class="tag t-warn">uwaga</span>',info:'<span class="tag t-info">czeka</span>'};
+async function loadAlerty(){const[l,s]=await Promise.all([api("/api/alerty"),api("/api/stan")]);
+ $("#alInfo").textContent=s.deadlineDays>0?`Termin zwrotu liczony jako ${s.deadlineDays} dni.`:"Termin zwrotu automatycznego nie jest ustawiony (panel /admin) – alerty pokazują tylko liczbę dni od skanu.";
+ $("#alT").innerHTML=l.map(a=>{const r=a.allegro||{};let t="";if(a.deadline){t=fmt(a.deadline)+" ("+(a.daysLeft<0?"minął":"za "+a.daysLeft+" dni")+")"}
+ return`<tr><td>${LV[a.level]}</td><td>${esc(a.text)}</td><td>${fmt(a.since)}</td><td>${t}</td><td>${esc(r.account)} ${esc(r.referenceNumber)}</td><td>${esc(r.orderId)}</td><td>${esc(r.buyerLogin)}</td><td>${ast(r)}</td></tr>`}).join("")||'<tr><td colspan="8" class="mut">Brak alertów.</td></tr>'}
+async function loadHist(){const d=+$("#hDni").value||7;$("#hCsv").href="/eksport.csv?dni="+d;const l=await api("/api/skany?dni="+d);$("#histT").innerHTML=l.map(v=>`<tr><td>${fmt(v.at)}</td><td>${esc(v.worker)}</td><td>${esc(v.batch)}</td><td>${esc(v.raw)}</td><td>${retCell(v)}</td><td>${ast(v.allegro)}</td><td>${refundCell(v.allegro)}</td><td>${esc(v.baseStatus)}</td></tr>`).join("")}
+$("#hPokaz").onclick=loadHist;$("#hDni").onchange=()=>{$("#hCsv").href="/eksport.csv?dni="+(+$("#hDni").value||7)};
+async function loadCounts(){try{const[w,a]=await Promise.all([api("/api/wyjasnienia"),api("/api/alerty")]);const n=a.filter(x=>x.level!=="info").length;$("#cWyj").hidden=!w.length;$("#cWyj").textContent=w.length;$("#cAl").hidden=!n;$("#cAl").textContent=n}catch(e){}}
+async function loadStan(){try{const s=await api("/api/stan");const sel=$("#worker"),cur=ls.get("osoba")||sel.value;sel.innerHTML='<option value="">– wybierz –</option>'+(s.workers||[]).map(w=>`<option${w===cur?" selected":""}>${esc(w)}</option>`).join("");
+ const e=Object.values(s.errors||{});$("#sync").innerHTML=(s.allegroAccounts.length?"Allegro: "+fmt(s.lastAllegro):"Allegro: brak kont")+" · "+(s.baseOn?"Base: "+fmt(s.lastBase):"Base: wyłączony")+(e.length?' · <span style="color:#ff8a80" title="'+esc(e.join("\n"))+'">błąd synchronizacji</span>':"")}catch(e){$("#sync").textContent="brak połączenia z serwerem"}}
+function load(t){if(t==="skan")loadToday();if(t==="wyj")loadWyj();if(t==="alerty")loadAlerty();if(t==="hist")loadHist()}
+loadStan();loadToday();loadCounts();setInterval(()=>{loadStan();loadCounts()},60000);
+</script>
+</body>
+</html>
