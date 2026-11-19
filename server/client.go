@@ -59,7 +59,7 @@ func wsHandler(h *Hub, store *Store) http.HandlerFunc {
 				_ = store.SetStation(device, station)
 			}
 		}
-		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		conn, err := websocket.Accept(w, r, nil) // domyślnie: odrzuca połączenia ze stron z innego adresu (Origin)
 		if err != nil {
 			return
 		}

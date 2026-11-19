@@ -76,7 +76,7 @@ Przypisanie z panelu ma pierwszeństwo przed nazwą wpisaną na tablecie. Tablet
 
 Przy pierwszym uruchomieniu zwykłego APK ekran **Ustawienia**:
 
-- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu (opcjonalnie; puste = nadaje panel).
+- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `https://192.168.1.20:8443` z pinem albo `192.168.1.20:8080`), klucz urządzeń, nazwa stołu (opcjonalnie; puste = nadaje panel).
 - **Terminal**: tryb „Terminal pracownika”, adres serwera, klucz urządzeń. Na liście uprawnień dotknij każdej pozycji z ✗:
   powiadomienia, praca w tle bez ograniczeń baterii, **wyświetlanie nad innymi aplikacjami** (ekran wezwania pojawia się nad innymi aplikacjami),
   powiadomienia pełnoekranowe (Android 14+).
@@ -92,6 +92,22 @@ Ponowne wejście w ustawienia: ikona ⚙ i klucz urządzeń.
   Osoby wezwanej przez inne stanowisko nie można przejąć, dopóki nie potwierdzi.
 - Terminal: ekran „PODEJDŹ DO: KONTR_12”, alarm na pełnej głośności i wibracja do naciśnięcia **IDĘ**.
   Niepotwierdzone wezwanie wygasa po 5 min.
+
+## Bezpieczeństwo
+
+- **HTTPS/WSS na porcie 8443.** Serwer przy pierwszym starcie tworzy certyfikat własny (`dane/tls.crt`, `dane/tls.key`, 10 lat)
+  i zapisuje w `serwer.log` **pin** (odcisk klucza). Certyfikat dla konkretnego adresu: `przywolania-serwer cert 192.168.x.x dane`.
+  Aplikacja z pinem ufa tylko temu certyfikatowi; nic nie trzeba instalować na urządzeniach. Adres w aplikacji: `https://IP:8443`.
+  APK bez ręcznej konfiguracji: `-PdefaultServer=https://IP:8443 -PdefaultKey=… -PcertPin=sha256/…`.
+  Po przejściu wszystkich urządzeń na HTTPS usuń port 8080 z `docker-compose.yml` (albo uruchom z `-addr ""`).
+  Przeglądarka pokaże ostrzeżenie przy panelu `https://IP:8443/admin` (certyfikat własny) – akceptuje się je raz.
+- **Aktualizacja APK** z nowym adresem, kluczem lub pinem nadpisuje ustawienia, jeśli nie zmieniono ich ręcznie na urządzeniu.
+- **Limity prób:** 5 błędnych PIN-ów dla pracownika (albo 20 z jednego adresu) w 10 min = blokada logowania na 5 min;
+  10 błędnych haseł panelu z jednego adresu = blokada panelu dla tego adresu na 15 min.
+- **Panel:** zmiany przyjmowane tylko z formularzy samego panelu (sprawdzenie Origin/Referer), zakaz osadzania w ramkach.
+  Połączenia WebSocket ze stron z innego adresu są odrzucane.
+- **Docker:** serwer działa jako użytkownik `przyw` (uid 1001), nie root; przy starcie przejmuje folder `/data`.
+- Port 8080/8443 nie może być przekierowany z internetu; ogranicz go w zaporze do sieci magazynu.
 
 ## Dziennik
 
