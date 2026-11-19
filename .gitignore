@@ -1,0 +1,14 @@
+# Android
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.kotlin/
+*.iml
+.idea/
+# klucz podpisu APK: domyślnie poza repo (patrz README)
+android/keystore/
+# Serwer
+server/dane/
+server/przywolania-serwer
+server/*.exe

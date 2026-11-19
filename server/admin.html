@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Przywołania – panel</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;color:#1d1d1f}
+h1{font-size:22px;margin:0 0 12px} h2{font-size:18px;margin:24px 0 8px}
+.box{background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%} td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
+input{padding:6px;font-size:15px} input[name=pin]{width:90px} button{padding:6px 12px;font-size:15px;cursor:pointer}
+.err{background:#fde8e8;border:1px solid #f5b5b5;padding:8px;border-radius:6px;margin-bottom:12px}
+.st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:13px}
+.dostepny{background:#d9f2e1}.brak_polaczenia{background:#e5e5e5}.wezwany{background:#ffe7b3}.brak_odpowiedzi{background:#ffc9c9}.idzie{background:#cfe3ff}
+code{background:#eef;padding:2px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Przywołania do stolika pakującego</h1>
+{{if .Msg}}<div class="err">{{.Msg}}</div>{{end}}
+
+<div class="box">
+<b>Klucz urządzeń</b> (wpisz w ustawieniach aplikacji na tabletach i terminalach): <code>{{.DeviceKey}}</code><br>
+Wersja serwera: {{.Version}}
+</div>
+
+<h2>Teraz</h2>
+<div class="box" id="stan">Ładowanie…</div>
+
+<h2>Pracownicy</h2>
+<div class="box">
+<table>
+<tr><th>Imię i nazwisko</th><th>PIN (puste = bez PIN-u)</th><th></th><th></th></tr>
+{{range .Workers}}
+<tr>
+<td><input form="f{{.ID}}" name="name" value="{{.Name}}" required></td>
+<td><input form="f{{.ID}}" name="pin" value="{{.Pin}}" inputmode="numeric" pattern="[0-9]*" maxlength="8"></td>
+<td><form id="f{{.ID}}" method="post"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="save"><button>Zapisz</button></form></td>
+<td><form method="post" onsubmit="return confirm('Usunąć pracownika?')"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="delete"><button>Usuń</button></form></td>
+</tr>
+{{end}}
+<tr>
+<td><input form="fnew" name="name" placeholder="Nowy pracownik" required></td>
+<td><input form="fnew" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"></td>
+<td><form id="fnew" method="post"><input type="hidden" name="action" value="save"><button>Dodaj</button></form></td><td></td>
+</tr>
+</table>
+</div>
+
+<h2>Tablety i stoły</h2>
+<div class="box">
+<p>Każdy tablet zgłasza się swoim ID. Wpisz nazwę stołu (np. KONTR_12) i zapisz, a tablet przełączy się od razu, bez wizyty przy nim. Puste pole usuwa przypisanie.</p>
+<table>
+<tr><th>ID tabletu</th><th>Połączony</th><th>Adres IP</th><th>Stół</th><th></th></tr>
+{{range .Tablets}}
+<tr>
+<td><code>{{.Device}}</code></td>
+<td>{{if .Online}}tak{{else}}nie{{end}}</td>
+<td>{{.IP}}</td>
+<td><input form="t{{.Device}}" name="name" value="{{.Station}}" placeholder="KONTR_XX" style="text-transform:uppercase"></td>
+<td><form id="t{{.Device}}" method="post"><input type="hidden" name="device" value="{{.Device}}"><input type="hidden" name="action" value="station"><button>Zapisz</button></form></td>
+</tr>
+{{else}}
+<tr><td colspan="5">Żaden tablet jeszcze się nie połączył.</td></tr>
+{{end}}
+</table>
+</div>
+
+<script>
+const N={dostepny:'dostępny',brak_polaczenia:'brak połączenia',wezwany:'wezwany',brak_odpowiedzi:'brak odpowiedzi',idzie:'idzie'};
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function load(){
+ try{
+  const r=await fetch('/admin/stan',{cache:'no-store'}); const d=await r.json();
+  const on=d.tablets.filter(t=>t.online);
+  let h='<p>Tablety połączone: <b>'+on.length+'</b> · terminale połączone: <b>'+d.terminals+'</b> · zalogowani: <b>'+d.workers.length+'</b></p>';
+  h+='<table><tr><th>Pracownik</th><th>Status</th><th>Stanowisko</th></tr>';
+  for(const w of d.workers){h+='<tr><td>'+esc(w.name)+'</td><td><span class="st '+w.status+'">'+N[w.status]+'</span></td><td>'+esc(w.station||'')+'</td></tr>'}
+  h+='</table>';
+  if(on.length){h+='<p>Stoły online: '+on.map(t=>esc(t.station||('bez stołu: '+t.device))).join(', ')+'</p>'}
+  document.getElementById('stan').innerHTML=h;
+ }catch(e){document.getElementById('stan').textContent='Brak połączenia z serwerem'}
+}
+load(); setInterval(load,3000);
+</script>
+</body>
+</html>
