@@ -5,7 +5,6 @@ Dotknięcie przycisku wysyła wezwanie na terminal tej osoby: alarm dźwiękowy 
 Tablet widzi status: dostępny, wezwany, brak odpowiedzi (po 60 s), idzie, terminal bez połączenia.
 
 Działa w sieci lokalnej magazynu. Nie wymaga usług Google (FCM) ani internetu, więc działa na terminalach z GMS i bez GMS.
-Nie korzysta z API EasyStorage (API nie ma metod dla użytkowników i sesji, a każde użycie API jest liczone jako licencja).
 
 ```
  Tablety (30 stanowisk) ─┐                         ┌─ Terminale (ok. 30)
@@ -52,13 +51,13 @@ Serwer powinien mieć stały adres IP (rezerwacja DHCP). Tablety i terminale mus
 
 ## 2. Aplikacja na tabletach i terminalach
 
-Instalacja z pliku `przywolania.apk` (tak jak aplikacja EasyStorage: zgoda na instalację z nieznanych źródeł) albo przez MDM.
+Instalacja z pliku `przywolania.apk` (zgoda na instalację z nieznanych źródeł) albo przez MDM.
 
 Przy pierwszym uruchomieniu ekran **Ustawienia**:
 
-- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu jak w EasyStorage (np. `KONTR_12`; wielkie litery i `_` ustawiane automatycznie).
+- **Tablet**: tryb „Tablet na stanowisku”, adres serwera (np. `192.168.1.20:8080`), klucz urządzeń, nazwa stołu (np. `KONTR_12`; wielkie litery i `_` ustawiane automatycznie).
 - **Terminal**: tryb „Terminal pracownika”, adres serwera, klucz urządzeń. Na liście uprawnień dotknij każdej pozycji z ✗:
-  powiadomienia, praca w tle bez ograniczeń baterii, **wyświetlanie nad innymi aplikacjami** (ekran wezwania pojawia się nad EasyStorage),
+  powiadomienia, praca w tle bez ograniczeń baterii, **wyświetlanie nad innymi aplikacjami** (ekran wezwania pojawia się nad innymi aplikacjami),
   powiadomienia pełnoekranowe (Android 14+).
 
 Ponowne wejście w ustawienia: ikona ⚙ i klucz urządzeń.
