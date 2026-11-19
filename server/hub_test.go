@@ -131,9 +131,12 @@ func TestFlow(t *testing.T) {
 	term.send(map[string]any{"t": "ack", "id": call["id"]})
 	tab1.wait("state", func(m map[string]any) bool { return statusOf(m, "Anna Nowak") == "idzie" })
 
-	// anulowanie
+	// anulowanie (+ podwójne dotknięcie nie tworzy drugiego wezwania)
 	tab1.send(map[string]any{"t": "call", "worker": anna})
 	c2 := term.wait("call", nil)
+	tab1.send(map[string]any{"t": "call", "worker": anna})
+	tab1.wait("call_result", nil)
+	tab1.wait("call_result", nil)
 	tab1.send(map[string]any{"t": "cancel", "worker": anna})
 	term.wait("call_cancel", func(m map[string]any) bool { return m["id"] == c2["id"] })
 

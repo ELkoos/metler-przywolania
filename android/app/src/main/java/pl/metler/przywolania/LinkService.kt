@@ -43,6 +43,7 @@ class LinkService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var stopping = false
+    private var ringingStation: String? = null // stanowisko bieżącego wezwania (wątek główny)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -184,8 +185,12 @@ class LinkService : Service() {
             }
             "call" -> {
                 val c = CallInfo(m.getString("id"), m.optString("station"), m.optLong("at"))
+                val prevStation = ringingStation
+                ringingStation = c.station
                 AppState.update { activeCall = c }
-                startCall(c)
+                // to samo wezwanie (np. po ponownym połączeniu) albo kolejne ze stanowiska, gdy ekran już dzwoni:
+                // tylko aktualizacja, bez ponownego otwierania ekranu
+                if (prevStation != c.station) startCall(c)
             }
             "call_cancel" -> {
                 if (AppState.activeCall?.id == m.optString("id")) stopCall()
@@ -233,6 +238,7 @@ class LinkService : Service() {
     }
 
     private fun stopCall() {
+        ringingStation = null
         alarm.stop()
         nm().cancel(NOTIF_CALL)
         AppState.update { activeCall = null }

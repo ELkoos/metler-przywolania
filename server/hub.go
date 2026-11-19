@@ -291,6 +291,11 @@ func (h *Hub) handleTablet(c *Client, m inMsg) {
 			c.Send(map[string]any{"t": "call_result", "ok": false, "worker": m.Worker, "reason": "Już wezwany przez: " + s.Call.Station})
 			return
 		}
+		// ponowne dotknięcie w ciągu 5 s (np. podwójne kliknięcie) nie tworzy nowego wezwania
+		if s.Call != nil && s.Call.AckAt.IsZero() && s.Call.Station == c.Station && time.Since(s.Call.At) < 5*time.Second {
+			c.Send(map[string]any{"t": "call_result", "ok": true, "worker": m.Worker, "warning": ""})
+			return
+		}
 		s.Call = &Call{ID: newID(), Station: c.Station, At: time.Now()}
 		h.calls.Write("wezwanie", m.Worker, h.store.WorkerName(m.Worker), c.Station, "")
 		h.sendTo(s.Client, map[string]any{"t": "call", "id": s.Call.ID, "station": s.Call.Station, "at": s.Call.At.UnixMilli()})
