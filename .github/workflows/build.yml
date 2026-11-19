@@ -58,8 +58,9 @@ jobs:
           docker run -d --name test -p 18080:8080 -p 18443:8443 -v /tmp/dane:/data $IMG:$VER
           for i in $(seq 1 20); do curl -fsS http://localhost:18080/zdrowie && break; sleep 1; done
           curl -fsS -k https://localhost:18443/zdrowie
-          docker exec test sh -c 'ps -o user,comm | grep przywolania-serwer' | tee /tmp/ps.txt
-          grep -q '^przyw' /tmp/ps.txt
+          docker exec test ps -o user,args | tee /tmp/ps.txt
+          # proces serwera musi działać jako przyw (nie root)
+          grep 'przywolania-serwer' /tmp/ps.txt | grep -v -q '^root' && ! grep 'przywolania-serwer' /tmp/ps.txt | grep -q '^root'
           sudo test -f /tmp/dane/tls.crt
           docker logs test
           docker rm -f test
