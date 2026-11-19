@@ -39,10 +39,10 @@ jobs:
   obraz-docker:
     runs-on: ubuntu-latest
     needs: serwer
-    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -53,8 +53,20 @@ jobs:
           VER="${GITHUB_REF_NAME}"
           [[ "$GITHUB_REF" == refs/tags/* ]] || VER="dev-${GITHUB_SHA::7}"
           docker build --build-arg VERSION=$VER -t $IMG:$VER -t $IMG:latest server
-          docker push $IMG:$VER
-          docker push $IMG:latest
+          # test obrazu: start z pustym folderem danych, HTTP i HTTPS odpowiadają, serwer nie działa jako root
+          mkdir -p /tmp/dane && sudo chown 0:0 /tmp/dane
+          docker run -d --name test -p 18080:8080 -p 18443:8443 -v /tmp/dane:/data $IMG:$VER
+          for i in $(seq 1 20); do curl -fsS http://localhost:18080/zdrowie && break; sleep 1; done
+          curl -fsS -k https://localhost:18443/zdrowie
+          docker exec test sh -c 'ps -o user,comm | grep przywolania-serwer' | tee /tmp/ps.txt
+          grep -q '^przyw' /tmp/ps.txt
+          sudo test -f /tmp/dane/tls.crt
+          docker logs test
+          docker rm -f test
+          if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
+            docker push $IMG:$VER
+            docker push $IMG:latest
+          fi
 
   android:
     runs-on: ubuntu-latest

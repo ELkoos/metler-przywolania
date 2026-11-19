@@ -38,6 +38,11 @@ type Session struct {
 	Call         *Call
 }
 
+var (
+	pinLimiter = NewLimiter(5, 10*time.Minute, 5*time.Minute)
+	ipLimiter  = NewLimiter(20, 10*time.Minute, 5*time.Minute)
+)
+
 type Hub struct {
 	mu       sync.Mutex
 	store    *Store
@@ -239,10 +244,21 @@ func (h *Hub) sessionOf(c *Client) (string, *Session) {
 func (h *Hub) handleTerminal(c *Client, m inMsg) {
 	switch m.T {
 	case "login":
+		// limit prób: 5 błędnych PIN-ów na pracownika albo 20 z jednego adresu w 10 min = blokada 5 min
+		wKey, ipKey := "w:"+m.Worker, "ip:"+hostOf(c.Remote)
+		if d := max(pinLimiter.Blocked(wKey), ipLimiter.Blocked(ipKey)); d > 0 {
+			c.Send(map[string]any{"t": "login_err", "reason": fmt.Sprintf("Za dużo błędnych prób. Spróbuj za %d min", int(d.Minutes())+1)})
+			return
+		}
 		if !h.store.CheckPin(m.Worker, m.Pin) {
+			pinLimiter.Fail(wKey)
+			if ipLimiter.Fail(ipKey) {
+				log.Printf("blokada logowania z adresu %s (za dużo błędnych PIN-ów)", hostOf(c.Remote))
+			}
 			c.Send(map[string]any{"t": "login_err", "reason": "Nieprawidłowy pracownik lub PIN"})
 			return
 		}
+		pinLimiter.Success(wKey)
 		// ten terminal mógł mieć zalogowaną inną osobę
 		if oldID, old := h.sessionOf(c); old != nil && oldID != m.Worker {
 			delete(h.sessions, oldID)

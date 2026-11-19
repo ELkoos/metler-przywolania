@@ -44,8 +44,9 @@ class SettingsActivity : Activity() {
             root.addView(e)
             return e
         }
-        val server = field("Adres serwera", prefs.server, "np. 192.168.1.20:8080", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        val server = field("Adres serwera", prefs.server, "np. https://192.168.1.20:8443", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         val key = field("Klucz urządzenia", prefs.key, "z panelu serwera (/admin)")
+        val pin = field("Odcisk certyfikatu (tylko HTTPS)", prefs.pin, "sha256/… (z dziennika serwera)")
         val stationLabel = text("Nazwa stołu (puste = nadaje panel serwera)", 16f, true)
         val station = EditText(this).apply { setText(prefs.station); hint = "np. KONTR_12"; textSize = 18f; isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
@@ -70,6 +71,7 @@ class SettingsActivity : Activity() {
             prefs.mode = mode
             prefs.server = server.text.toString().trim()
             prefs.key = key.text.toString().trim()
+            prefs.pin = pin.text.toString().trim()
             prefs.station = station.text.toString().trim().uppercase().replace(" ", "_")
             if (modeChanged) { prefs.workerId = ""; prefs.workerPin = "" }
             LinkService.stop(this)

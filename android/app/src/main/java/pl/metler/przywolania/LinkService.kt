@@ -32,11 +32,7 @@ class LinkService : Service() {
     private lateinit var prefs: Prefs
     private lateinit var alarm: Alarm
     private val handler = Handler(Looper.getMainLooper())
-    private val client = OkHttpClient.Builder()
-        .pingInterval(20, TimeUnit.SECONDS)
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MILLISECONDS)
-        .build()
+    private val client by lazy { Tls.client(prefs.pin) }
     private var ws: WebSocket? = null
     private var generation = 0
     private var retryDelay = 1000L
@@ -51,6 +47,7 @@ class LinkService : Service() {
         super.onCreate()
         instance = this
         prefs = Prefs(this)
+        prefs.seedDefaults() // np. po aktualizacji APK uruchomionej przez MDM, zanim ktoś otworzy aplikację
         alarm = Alarm(this)
         createChannels()
         val n = statusNotification("Łączenie z serwerem…")
@@ -85,12 +82,14 @@ class LinkService : Service() {
     // ---------- połączenie ----------
 
     private fun url(): String {
-        var s = prefs.server.trim().removePrefix("http://").removePrefix("ws://").trimEnd('/')
-        if (!s.contains(":")) s += ":8080"
+        val raw = prefs.server.trim()
+        val secure = raw.startsWith("https://") || raw.startsWith("wss://")
+        var s = raw.substringAfter("://").trimEnd('/')
+        if (!s.contains(":")) s += if (secure) ":8443" else ":8080"
         fun e(v: String) = URLEncoder.encode(v, "UTF-8")
         val q = "role=${e(prefs.mode)}&key=${e(prefs.key)}&device=${e(prefs.deviceId)}" +
                 if (prefs.mode == Prefs.MODE_TABLET) "&station=${e(prefs.station)}" else ""
-        return "ws://$s/ws?$q"
+        return (if (secure) "wss" else "ws") + "://$s/ws?$q"
     }
 
     private fun reconnect() {
@@ -133,7 +132,8 @@ class LinkService : Service() {
                 val msg = when (response?.code) {
                     401 -> "Zły klucz urządzenia"
                     400 -> "Błędne ustawienia (rola/stanowisko)"
-                    else -> "Brak połączenia z serwerem ${prefs.server}"
+                    else -> if (t is javax.net.ssl.SSLException || t.cause is java.security.cert.CertificateException)
+                        "Certyfikat serwera nie pasuje do ustawień (pin)" else "Brak połączenia z serwerem ${prefs.server}"
                 }
                 lost(msg)
             }

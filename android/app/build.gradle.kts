@@ -9,6 +9,7 @@ val appVersionCode = ((project.findProperty("appVersionCode") as String?) ?: "1"
 // Podawane tylko przy budowie lokalnej (-PdefaultServer=... -PdefaultKey=...), nigdy w repozytorium.
 val defaultServer = (project.findProperty("defaultServer") as String?) ?: ""
 val defaultKey = (project.findProperty("defaultKey") as String?) ?: ""
+val certPin = (project.findProperty("certPin") as String?) ?: ""
 
 android {
     namespace = "pl.metler.przywolania"
@@ -22,6 +23,7 @@ android {
         versionName = appVersionName
         buildConfigField("String", "DEFAULT_SERVER", "\"${defaultServer.replace("\"", "")}\"")
         buildConfigField("String", "DEFAULT_KEY", "\"${defaultKey.replace("\"", "")}\"")
+        buildConfigField("String", "CERT_PIN", "\"${certPin.replace("\"", "")}\"")
     }
     buildFeatures {
         buildConfig = true

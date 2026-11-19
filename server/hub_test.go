@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +175,14 @@ func TestStationAssignment(t *testing.T) {
 	req, _ := http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth("x", store.Config.AdminPassword)
+	// bez nagłówka Origin: odrzucone (CSRF)
+	if resp, err := http.DefaultClient.Do(req.Clone(req.Context())); err != nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("csrf: %v %v", err, resp)
+	}
+	req, _ = http.NewRequest("POST", srv.URL+"/admin", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth("x", store.Config.AdminPassword)
+	req.Header.Set("Origin", srv.URL)
 	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := c.Do(req)
 	if err != nil || resp.StatusCode != http.StatusSeeOther {
@@ -184,5 +195,68 @@ func TestStationAssignment(t *testing.T) {
 	tab2.wait("station", func(m map[string]any) bool { return m["name"] == "KONTR_12" })
 	if got := store.Station("T1"); got != "KONTR_12" {
 		t.Fatalf("zapis: %q", got)
+	}
+}
+
+func TestLimiter(t *testing.T) {
+	now := time.Now()
+	l := NewLimiter(3, time.Minute, 5*time.Minute)
+	l.now = func() time.Time { return now }
+	l.Fail("a")
+	l.Fail("a")
+	if l.Blocked("a") > 0 {
+		t.Fatal("za wcześnie zablokowany")
+	}
+	if !l.Fail("a") || l.Blocked("a") == 0 {
+		t.Fatal("powinien być zablokowany po 3 próbach")
+	}
+	l.Success("a") // w trakcie blokady sukces jej nie zdejmuje
+	if l.Blocked("a") == 0 {
+		t.Fatal("blokada zdjęta za wcześnie")
+	}
+	now = now.Add(6 * time.Minute)
+	if l.Blocked("a") > 0 {
+		t.Fatal("blokada powinna wygasnąć")
+	}
+}
+
+func TestPinLimit(t *testing.T) {
+	store, _, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.Upsert("", "Ewa Test", "4321")
+	id := store.Workers()[0].ID
+	hub := NewHub(store, NewCallLog(store.dir))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wsHandler(hub, store))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	term := dial(t, srv.URL, url.Values{"role": {"terminal"}, "key": {store.Config.DeviceKey}, "device": {"P1"}})
+	for i := 0; i < 5; i++ {
+		term.send(map[string]any{"t": "login", "worker": id, "pin": "0000"})
+		term.wait("login_err", nil)
+	}
+	// po 5 błędach nawet dobry PIN jest odrzucony
+	term.send(map[string]any{"t": "login", "worker": id, "pin": "4321"})
+	m := term.wait("login_err", nil)
+	if !strings.Contains(m["reason"].(string), "Za dużo") {
+		t.Fatalf("oczekiwano blokady: %v", m)
+	}
+}
+
+func TestCert(t *testing.T) {
+	dir := t.TempDir()
+	crt, _, err := ensureCert(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.LoadX509KeyPair(crt, filepath.Join(dir, "tls.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := x509.ParseCertificate(pair.Certificate[0])
+	if !strings.HasPrefix(SPKIPin(c), "sha256/") || c.NotAfter.Before(time.Now().AddDate(9, 0, 0)) {
+		t.Fatalf("certyfikat: %v %s", c.NotAfter, SPKIPin(c))
 	}
 }

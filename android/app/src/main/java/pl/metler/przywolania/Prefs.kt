@@ -42,14 +42,39 @@ class Prefs(private val ctx: Context) {
         if (BuildConfig.DEFAULT_SERVER.isEmpty()) ""
         else if (ctx.resources.configuration.smallestScreenWidthDp >= 600) MODE_TABLET else MODE_TERMINAL
 
-    /** Zapisuje ustawienia wpisane w APK, żeby przetrwały aktualizację do APK bez nich. */
+    /** Odcisk klucza certyfikatu serwera ("sha256/..."); pusty = zwykła weryfikacja certyfikatu. */
+    var pin: String
+        get() = p.getString("pin", null) ?: BuildConfig.CERT_PIN
+        set(v) = p.edit().putString("pin", v).apply()
+
+    /**
+     * Zapisuje ustawienia wpisane w APK, żeby przetrwały aktualizację do APK bez nich.
+     * Nowszy APK z innym adresem/kluczem/pinem nadpisuje je, o ile nikt nie zmienił ich ręcznie
+     * (porównanie z wartościami z poprzedniego zapisu; dla urządzeń z wersji 1.1.0 – ten sam adres IP serwera).
+     */
+    @Synchronized
     fun seedDefaults() {
-        if (BuildConfig.DEFAULT_SERVER.isEmpty() || p.contains("server")) return
-        p.edit().putString("server", BuildConfig.DEFAULT_SERVER)
+        if (BuildConfig.DEFAULT_SERVER.isEmpty()) return
+        val defaults = listOf(BuildConfig.DEFAULT_SERVER, BuildConfig.DEFAULT_KEY, BuildConfig.CERT_PIN).joinToString("|")
+        val seed = p.getString("seed", null)
+        if (seed == defaults) return
+        val stored = p.getString("server", null)
+        val e = p.edit()
+        if (stored == null) {
+            e.putString("mode", autoMode())
+        } else {
+            val current = listOf(server, key, pin).joinToString("|")
+            val untouched = seed == current || (seed == null && host(stored) == host(BuildConfig.DEFAULT_SERVER))
+            if (!untouched) return
+        }
+        e.putString("server", BuildConfig.DEFAULT_SERVER)
             .putString("key", BuildConfig.DEFAULT_KEY)
-            .putString("mode", autoMode())
-            .apply()
+            .putString("pin", BuildConfig.CERT_PIN)
+            .putString("seed", defaults)
+            .commit()
     }
+
+    private fun host(s: String) = s.trim().substringAfter("://").substringBefore("/").substringBefore(":")
 
     // stół tabletu może być pusty: przypisuje go panel serwera
     val configured: Boolean
