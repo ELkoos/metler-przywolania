@@ -31,6 +31,8 @@ Gotowe pliki: zakładka **Actions** → ostatnia budowa → Artifacts. Po oznacz
 3. Jeśli obraz z ghcr.io jest prywatny: w GitHub (Packages → metler-przywolania-serwer → Package settings) ustaw widoczność **Public**
    albo w Container Manager dodaj rejestr `ghcr.io` z tokenem GitHub (uprawnienie `read:packages`).
 4. Dane (pracownicy, hasła, dziennik) są w `/docker/przywolania/dane`.
+5. Aktualizacja: Projekt → Zatrzymaj → Uruchom. `pull_policy: always` w `docker-compose.yml` wymusza pobranie nowego obrazu
+   (bez tego Compose używa obrazu `latest` już zapisanego na NAS).
 
 ### Windows (alternatywa)
 

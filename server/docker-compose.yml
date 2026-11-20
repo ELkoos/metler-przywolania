@@ -4,6 +4,7 @@ services:
   przywolania:
     image: ghcr.io/elkoos/metler-przywolania-serwer:latest
     container_name: przywolania
+    pull_policy: always   # przy każdym uruchomieniu pobiera aktualny obraz (inaczej zostaje stary :latest)
     restart: unless-stopped
     ports:
       - "8080:8080"   # HTTP – do wyłączenia, gdy wszystkie urządzenia mają APK z HTTPS
