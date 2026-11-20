@@ -11,5 +11,8 @@ services:
       - "8443:8443"   # HTTPS/WSS
     environment:
       - TZ=Europe/Warsaw
+      # Dostęp tylko z sieci magazynu. Włącz dopiero, gdy panel (Tablety i stoły → Adres IP) pokazuje
+      # adresy urządzeń z tej sieci; jeśli pokazuje 172.x.x.x, Docker ukrywa prawdziwe adresy i filtr zablokowałby wszystkich.
+      # - PRZYW_ALLOW=192.168.0.0/23
     volumes:
       - ./dane:/data

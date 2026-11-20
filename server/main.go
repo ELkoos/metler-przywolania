@@ -19,6 +19,7 @@ var version = "dev"
 var (
 	flagAddr    = flag.String("addr", ":8080", "adres i port nasłuchu HTTP (pusty = wyłączony)")
 	flagTLSAddr = flag.String("tls-addr", ":8443", "adres i port nasłuchu HTTPS/WSS (pusty = wyłączony); certyfikat dane/tls.crt + tls.key")
+	flagAllow   = flag.String("allow", "", "dozwolone podsieci, np. 192.168.0.0/23 (domyślnie: PRZYW_ALLOW; puste = bez ograniczeń)")
 	flagData    = flag.String("data", "", "katalog danych (domyślnie: PRZYW_DATA albo folder 'dane' obok programu)")
 )
 
@@ -63,10 +64,20 @@ func runServer(ctx context.Context) error {
 		http.NotFound(w, r)
 	})
 	adminRoutes(mux, hub, store)
+	allowSpec := *flagAllow
+	if allowSpec == "" {
+		allowSpec = os.Getenv("PRZYW_ALLOW")
+	}
+	allow, err := ParseAllowList(allowSpec)
+	if err != nil {
+		return err
+	}
+	log.Printf("dozwolone sieci: %s", allow)
+	handler := allow.Wrap(mux)
 	var servers []*http.Server
 	errc := make(chan error, 2)
 	if *flagAddr != "" {
-		srv := &http.Server{Addr: *flagAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+		srv := &http.Server{Addr: *flagAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 		servers = append(servers, srv)
 		go func() { errc <- srv.ListenAndServe() }()
 	}
@@ -75,7 +86,7 @@ func runServer(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		srv := &http.Server{Addr: *flagTLSAddr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
+		srv := &http.Server{Addr: *flagTLSAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second,
 			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 		servers = append(servers, srv)
 		go func() { errc <- srv.ListenAndServeTLS(crt, key) }()

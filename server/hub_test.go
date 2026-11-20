@@ -260,3 +260,32 @@ func TestCert(t *testing.T) {
 		t.Fatalf("certyfikat: %v %s", c.NotAfter, SPKIPin(c))
 	}
 }
+
+func TestAllowList(t *testing.T) {
+	a, err := ParseAllowList("192.168.0.0/23")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for addr, want := range map[string]bool{
+		"192.168.0.244:5000": true, "192.168.1.255:1": true, "192.168.2.1:1": false,
+		"10.0.0.5:1": false, "127.0.0.1:1": true, "[::1]:1": true, "172.17.0.1:1": false,
+	} {
+		if got := a.Allowed(addr); got != want {
+			t.Errorf("%s: %v, oczekiwano %v", addr, got, want)
+		}
+	}
+	none, _ := ParseAllowList("")
+	if !none.Allowed("8.8.8.8:1") {
+		t.Error("pusta lista powinna przepuszczać wszystko")
+	}
+	if _, err := ParseAllowList("192.168.0.0/99"); err == nil {
+		t.Error("oczekiwano błędu")
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/zdrowie", nil)
+	req.RemoteAddr = "203.0.113.9:4000"
+	a.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("kod %d", rec.Code)
+	}
+}
