@@ -31,6 +31,8 @@ Gotowe pliki: zakładka **Actions** → ostatnia budowa → Artifacts. Po oznacz
 3. Jeśli obraz z ghcr.io jest prywatny: w GitHub (Packages → metler-przywolania-serwer → Package settings) ustaw widoczność **Public**
    albo w Container Manager dodaj rejestr `ghcr.io` z tokenem GitHub (uprawnienie `read:packages`).
 4. Dane (pracownicy, hasła, dziennik) są w `/docker/przywolania/dane`.
+5. Aktualizacja: Projekt → Zatrzymaj → Uruchom. `pull_policy: always` w `docker-compose.yml` wymusza pobranie nowego obrazu
+   (bez tego Compose używa obrazu `latest` już zapisanego na NAS).
 
 ### Windows (alternatywa)
 
@@ -108,6 +110,9 @@ Ponowne wejście w ustawienia: ikona ⚙ i klucz urządzeń.
   Połączenia WebSocket ze stron z innego adresu są odrzucane.
 - **Docker:** serwer działa jako użytkownik `przyw` (uid 1001), nie root; przy starcie przejmuje folder `/data`.
 - Port 8080/8443 nie może być przekierowany z internetu; ogranicz go w zaporze do sieci magazynu.
+- **Dozwolone sieci:** `PRZYW_ALLOW=192.168.0.0/23` (albo `-allow`) – serwer odrzuca (403) połączenia spoza listy, localhost zawsze dozwolony,
+  odrzucone adresy w `serwer.log`. Wymaga `network_mode: host` (w sieci mostkowej Dockera serwer widzi tylko adres bramy, np. 172.18.0.1);
+  przed włączeniem sprawdź w panelu, czy kolumna „Adres IP” pokazuje prawdziwe adresy urządzeń.
 
 ## Dziennik
 

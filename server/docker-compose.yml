@@ -1,14 +1,17 @@
 # Synology DS1525+: Container Manager -> Projekt -> Utwórz, wskaż ten plik.
-# Dane (pracownicy, hasła, dziennik zdarzeń) w folderze ./dane obok tego pliku.
+# Dane (pracownicy, hasła, certyfikat, dziennik zdarzeń) w folderze ./dane obok tego pliku.
 services:
   przywolania:
     image: ghcr.io/elkoos/metler-przywolania-serwer:latest
     container_name: przywolania
+    pull_policy: always   # przy każdym uruchomieniu pobiera aktualny obraz (inaczej zostaje stary :latest)
     restart: unless-stopped
-    ports:
-      - "8080:8080"   # HTTP – do wyłączenia, gdy wszystkie urządzenia mają APK z HTTPS
-      - "8443:8443"   # HTTPS/WSS
+    # Sieć hosta: serwer widzi prawdziwe adresy IP urządzeń (w sieci mostkowej Dockera wszyscy mają adres bramy,
+    # np. 172.18.0.1) i nasłuchuje bezpośrednio na portach NAS: 8080 (HTTP) i 8443 (HTTPS). Porty muszą być wolne.
+    network_mode: host
     environment:
       - TZ=Europe/Warsaw
+      # Dostęp tylko z sieci magazynu. Włącz, gdy panel (Tablety i stoły → Adres IP) pokazuje adresy z tej sieci:
+      # - PRZYW_ALLOW=192.168.0.0/23
     volumes:
       - ./dane:/data
