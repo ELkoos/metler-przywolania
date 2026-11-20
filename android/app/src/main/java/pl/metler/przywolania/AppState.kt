@@ -6,9 +6,12 @@ import android.os.Looper
 data class PublicWorker(val id: String, val name: String, val hasPin: Boolean)
 data class WorkerState(
     val id: String, val name: String, val status: String,
-    val station: String, val since: Long, val online: Boolean
+    val station: String, val since: Long, val online: Boolean,
+    val escalated: Boolean = false
 )
 data class CallInfo(val id: String, val station: String, val at: Long)
+/** Alert dla brygadzisty: wezwany pracownik nie odpowiada. */
+data class AlertInfo(val id: String, val station: String, val worker: String, val at: Long)
 
 /** Wspólny stan aplikacji, obserwowany przez ekrany. Zmiany tylko w wątku głównym. */
 object AppState {
@@ -20,6 +23,7 @@ object AppState {
     var tabletWorkers: List<WorkerState> = emptyList()   // tablet: zalogowani pracownicy
     var serverTimeOffset: Long = 0                       // serwer - lokalnie, ms
     var activeCall: CallInfo? = null                     // terminal: bieżące wezwanie
+    var alerts: List<AlertInfo> = emptyList()            // terminal brygadzisty: wezwania bez odpowiedzi
     var toast: String = ""
 
     private val main = Handler(Looper.getMainLooper())

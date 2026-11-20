@@ -26,6 +26,17 @@ type Call struct {
 	Station string    `json:"station"`
 	At      time.Time `json:"at"`
 	AckAt   time.Time `json:"ackAt,omitempty"`
+	// Escalated: minęło ackTimeout bez potwierdzenia, brygadziści dostali alert
+	Escalated bool `json:"escalated,omitempty"`
+}
+
+// alertInfo to alert wysłany brygadzistom (wezwanie bez odpowiedzi).
+type alertInfo struct {
+	ID       string `json:"id"`
+	Station  string `json:"station"`
+	WorkerID string `json:"workerId"`
+	Worker   string `json:"worker"`
+	At       int64  `json:"at"` // początek wezwania, unix ms
 }
 
 // Session to stan pracownika zalogowanego na terminalu.
@@ -49,10 +60,11 @@ type Hub struct {
 	clients  map[*Client]bool
 	sessions map[string]*Session // klucz: workerID
 	calls    *CallLog
+	alerts   map[string]alertInfo // aktywne alerty brygadzistów, klucz: ID wezwania
 }
 
 func NewHub(store *Store, calls *CallLog) *Hub {
-	h := &Hub{store: store, clients: map[*Client]bool{}, sessions: map[string]*Session{}, calls: calls}
+	h := &Hub{store: store, clients: map[*Client]bool{}, sessions: map[string]*Session{}, calls: calls, alerts: map[string]alertInfo{}}
 	go h.ticker()
 	return h
 }
@@ -91,8 +103,9 @@ func (h *Hub) expireLocked(now time.Time) bool {
 					h.sendTo(s.Client, map[string]any{"t": "call_cancel", "id": c.ID})
 					s.Call = nil
 					changed = true
-				} else if now.Sub(c.At) > ackTimeout && now.Sub(c.At) <= ackTimeout+5*time.Second {
-					changed = true // przejście w "brak odpowiedzi"
+				} else if now.Sub(c.At) > ackTimeout && !c.Escalated {
+					c.Escalated = true // przejście w "brak odpowiedzi" + alert dla brygadzistów
+					changed = true
 				}
 			} else if now.Sub(c.AckAt) > comingDuration {
 				s.Call = nil
@@ -119,13 +132,16 @@ type WorkerState struct {
 	Station string `json:"station,omitempty"`
 	Since   int64  `json:"since,omitempty"` // unix ms
 	Online  bool   `json:"online"`          // terminal ma połączenie
+	Foreman bool   `json:"foreman,omitempty"`
+	// Escalated: brygadziści dostali alert o tym wezwaniu
+	Escalated bool `json:"escalated,omitempty"`
 }
 
 func (h *Hub) stateLocked() []WorkerState {
 	now := time.Now()
 	out := []WorkerState{}
 	for id, s := range h.sessions {
-		ws := WorkerState{ID: id, Name: h.store.WorkerName(id), Status: "dostepny", Online: s.Client != nil}
+		ws := WorkerState{ID: id, Name: h.store.WorkerName(id), Status: "dostepny", Online: s.Client != nil, Foreman: h.store.IsForeman(id)}
 		if s.Client == nil {
 			ws.Status = "brak_polaczenia"
 			ws.Since = s.DisconnectAt.UnixMilli()
@@ -137,6 +153,7 @@ func (h *Hub) stateLocked() []WorkerState {
 				if now.Sub(c.At) > ackTimeout {
 					ws.Status = "brak_odpowiedzi"
 				}
+				ws.Escalated = c.Escalated
 				ws.Since = c.At.UnixMilli()
 			} else {
 				ws.Status = "idzie"
@@ -150,12 +167,70 @@ func (h *Hub) stateLocked() []WorkerState {
 }
 
 func (h *Hub) broadcastStateLocked() {
+	h.syncAlertsLocked()
 	msg := map[string]any{"t": "state", "workers": h.stateLocked(), "now": time.Now().UnixMilli()}
 	for c := range h.clients {
 		if c.Role == "tablet" {
 			c.Send(msg)
 		}
 	}
+}
+
+// syncAlertsLocked porównuje wezwania z wysłanymi alertami: nowe eskalacje idą do
+// zalogowanych brygadzistów, zakończone wezwania (potwierdzone, anulowane, wygasłe,
+// wylogowanie) odwołują alert.
+func (h *Hub) syncAlertsLocked() {
+	want := map[string]alertInfo{}
+	for id, s := range h.sessions {
+		if c := s.Call; c != nil && c.AckAt.IsZero() && c.Escalated {
+			want[c.ID] = alertInfo{ID: c.ID, Station: c.Station, WorkerID: id, Worker: h.store.WorkerName(id), At: c.At.UnixMilli()}
+		}
+	}
+	for id := range h.alerts {
+		if _, ok := want[id]; !ok {
+			delete(h.alerts, id)
+			for c := range h.clients {
+				if c.Role == "terminal" {
+					c.Send(map[string]any{"t": "alert_cancel", "id": id})
+				}
+			}
+		}
+	}
+	for id, a := range want {
+		if _, ok := h.alerts[id]; ok {
+			continue
+		}
+		h.alerts[id] = a
+		n := 0
+		for fid, fs := range h.sessions {
+			if fid == a.WorkerID || fs.Client == nil || !h.store.IsForeman(fid) {
+				continue
+			}
+			fs.Client.Send(alertMsg(a))
+			n++
+		}
+		info := fmt.Sprintf("powiadomiono brygadzistów: %d", n)
+		if n == 0 {
+			info = "brak zalogowanych brygadzistów"
+		}
+		h.calls.Write("eskalacja", a.WorkerID, a.Worker, a.Station, info)
+	}
+}
+
+func alertMsg(a alertInfo) map[string]any {
+	return map[string]any{"t": "alert", "id": a.ID, "station": a.Station, "worker": a.Worker, "at": a.At}
+}
+
+// Alerts zwraca aktywne alerty (wezwania bez odpowiedzi po ackTimeout).
+func (h *Hub) Alerts() []alertInfo {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]alertInfo, 0, len(h.alerts))
+	for _, a := range h.alerts {
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
+	return out
 }
 
 func (h *Hub) State() []WorkerState {
@@ -211,10 +286,12 @@ func (h *Hub) WorkersChanged() {
 }
 
 type inMsg struct {
-	T      string `json:"t"`
-	Worker string `json:"worker"`
-	Pin    string `json:"pin"`
-	ID     string `json:"id"`
+	T        string `json:"t"`
+	Worker   string `json:"worker"`
+	Pin      string `json:"pin"`
+	ID       string `json:"id"`
+	Battery  *int   `json:"battery"`
+	Charging bool   `json:"charging"`
 }
 
 func (h *Hub) Handle(c *Client, raw []byte) {
@@ -224,6 +301,14 @@ func (h *Hub) Handle(c *Client, raw []byte) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if m.T == "status" {
+		// stan urządzenia (bateria) – obie role
+		if m.Battery != nil && *m.Battery >= 0 && *m.Battery <= 100 {
+			c.Battery = *m.Battery
+			c.Charging = m.Charging
+		}
+		return
+	}
 	switch c.Role {
 	case "terminal":
 		h.handleTerminal(c, m)
@@ -281,6 +366,14 @@ func (h *Hub) handleTerminal(c *Client, m inMsg) {
 			c.Send(map[string]any{"t": "call", "id": s.Call.ID, "station": s.Call.Station, "at": s.Call.At.UnixMilli()})
 		}
 		h.broadcastStateLocked()
+		// brygadzista logujący się w trakcie: dostaje trwające alerty
+		if h.store.IsForeman(m.Worker) {
+			for _, a := range h.alerts {
+				if a.WorkerID != m.Worker {
+					c.Send(alertMsg(a))
+				}
+			}
+		}
 	case "logout":
 		if id, s := h.sessionOf(c); s != nil {
 			h.calls.Write("wylogowanie", id, h.store.WorkerName(id), "", c.Device)
@@ -294,6 +387,13 @@ func (h *Hub) handleTerminal(c *Client, m inMsg) {
 			secs := s.Call.AckAt.Sub(s.Call.At).Seconds()
 			h.calls.Write("potwierdzenie", id, h.store.WorkerName(id), s.Call.Station, fmt.Sprintf("%.0f s", secs))
 			h.broadcastStateLocked()
+		}
+	case "alert_ack":
+		// brygadzista przyjął alert do wiadomości (wezwanie nadal czeka na pracownika)
+		if id, s := h.sessionOf(c); s != nil {
+			if a, ok := h.alerts[m.ID]; ok {
+				h.calls.Write("eskalacja_ok", id, h.store.WorkerName(id), a.Station, a.Worker)
+			}
 		}
 	}
 }
@@ -359,6 +459,7 @@ type TabletInfo struct {
 	Station string `json:"station"`
 	IP      string `json:"ip"`
 	Online  bool   `json:"online"`
+	Version string `json:"version,omitempty"`
 }
 
 // Tablets: wszystkie znane tablety (przypisane i połączone).
@@ -385,6 +486,7 @@ func (h *Hub) Tablets() []TabletInfo {
 			t.IP = host
 		}
 		t.Station = c.Station
+		t.Version = c.Version
 	}
 	out := make([]TabletInfo, 0, len(byDev))
 	for _, t := range byDev {
@@ -393,6 +495,51 @@ func (h *Hub) Tablets() []TabletInfo {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Station != out[j].Station {
 			return naturalLess(out[i].Station, out[j].Station)
+		}
+		return out[i].Device < out[j].Device
+	})
+	return out
+}
+
+type TerminalInfo struct {
+	Device   string `json:"device"`
+	Worker   string `json:"worker"`
+	Foreman  bool   `json:"foreman,omitempty"`
+	IP       string `json:"ip"`
+	Version  string `json:"version"`
+	Battery  int    `json:"battery"` // -1 = nieznany
+	Charging bool   `json:"charging"`
+	Online   bool   `json:"online"`
+	Since    int64  `json:"since"` // połączony od / rozłączony od, unix ms
+}
+
+// Terminals: połączone terminale oraz terminale zalogowanych osób bez połączenia.
+func (h *Hub) Terminals() []TerminalInfo {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := []TerminalInfo{}
+	for c := range h.clients {
+		if c.Role != "terminal" {
+			continue
+		}
+		t := TerminalInfo{Device: c.Device, IP: hostOf(c.Remote), Version: c.Version, Battery: c.Battery, Charging: c.Charging, Online: true, Since: c.Since.UnixMilli()}
+		if id, s := h.sessionOf(c); s != nil {
+			t.Worker = h.store.WorkerName(id)
+			t.Foreman = h.store.IsForeman(id)
+		}
+		out = append(out, t)
+	}
+	for id, s := range h.sessions {
+		if s.Client == nil {
+			out = append(out, TerminalInfo{Device: s.TerminalID, Worker: h.store.WorkerName(id), Foreman: h.store.IsForeman(id), Battery: -1, Since: s.DisconnectAt.UnixMilli()})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if (out[i].Worker == "") != (out[j].Worker == "") {
+			return out[i].Worker != ""
+		}
+		if out[i].Worker != out[j].Worker {
+			return out[i].Worker < out[j].Worker
 		}
 		return out[i].Device < out[j].Device
 	})

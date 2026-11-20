@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -72,8 +73,8 @@ func TestFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = store.Upsert("", "Anna Nowak", "1234")
-	_ = store.Upsert("", "Jan Kowalski", "")
+	_ = store.Upsert("", "Anna Nowak", "1234", false)
+	_ = store.Upsert("", "Jan Kowalski", "", false)
 	hub := NewHub(store, NewCallLog(store.dir))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", wsHandler(hub, store))
@@ -153,7 +154,7 @@ func TestStationAssignment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = store.Upsert("", "Anna Nowak", "")
+	_ = store.Upsert("", "Anna Nowak", "", false)
 	hub := NewHub(store, NewCallLog(store.dir))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", wsHandler(hub, store))
@@ -225,7 +226,7 @@ func TestPinLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = store.Upsert("", "Ewa Test", "4321")
+	_ = store.Upsert("", "Ewa Test", "4321", false)
 	id := store.Workers()[0].ID
 	hub := NewHub(store, NewCallLog(store.dir))
 	mux := http.NewServeMux()
@@ -287,5 +288,165 @@ func TestAllowList(t *testing.T) {
 	a.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("kod %d", rec.Code)
+	}
+}
+
+func TestEscalation(t *testing.T) {
+	store, _, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.Upsert("", "Anna Nowak", "", false)
+	_ = store.Upsert("", "Jan Brygadzista", "", true)
+	_ = store.Upsert("", "Ola Brygadzista", "", true)
+	ids := map[string]string{}
+	for _, w := range store.Workers() {
+		ids[w.Name] = w.ID
+	}
+	if store.Config.ForemanPassword == "" {
+		t.Fatal("brak hasla brygadzisty")
+	}
+	hub := NewHub(store, NewCallLog(store.dir))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wsHandler(hub, store))
+	adminRoutes(mux, hub, store)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	key := store.Config.DeviceKey
+
+	anna := dial(t, srv.URL, url.Values{"role": {"terminal"}, "key": {key}, "device": {"T1"}, "ver": {"1.3.0"}})
+	anna.send(map[string]any{"t": "login", "worker": ids["Anna Nowak"]})
+	anna.wait("login_ok", nil)
+	jan := dial(t, srv.URL, url.Values{"role": {"terminal"}, "key": {key}, "device": {"T2"}, "ver": {"1.3.0"}})
+	jan.send(map[string]any{"t": "login", "worker": ids["Jan Brygadzista"]})
+	jan.wait("login_ok", nil)
+	jan.send(map[string]any{"t": "status", "battery": 55, "charging": true})
+
+	tab := dial(t, srv.URL, url.Values{"role": {"tablet"}, "key": {key}, "station": {"KONTR_01"}, "device": {"A"}, "ver": {"1.3.0"}})
+	tab.wait("state", nil)
+	tab.send(map[string]any{"t": "call", "worker": ids["Anna Nowak"]})
+	call := anna.wait("call", nil)
+
+	// 61 s bez odpowiedzi
+	hub.mu.Lock()
+	if hub.expireLocked(time.Now().Add(61 * time.Second)) {
+		hub.broadcastStateLocked()
+	}
+	hub.mu.Unlock()
+	a := jan.wait("alert", nil)
+	if a["station"] != "KONTR_01" || a["worker"] != "Anna Nowak" || a["id"] != call["id"] {
+		t.Fatalf("alert: %v", a)
+	}
+	tab.wait("state", func(m map[string]any) bool {
+		for _, w := range m["workers"].([]any) {
+			if wm := w.(map[string]any); wm["name"] == "Anna Nowak" {
+				return wm["escalated"] == true
+			}
+		}
+		return false
+	})
+
+	// brygadzista logujący się później też dostaje trwający alert
+	ola := dial(t, srv.URL, url.Values{"role": {"terminal"}, "key": {key}, "device": {"T3"}})
+	ola.send(map[string]any{"t": "login", "worker": ids["Ola Brygadzista"]})
+	ola.wait("alert", func(m map[string]any) bool { return m["id"] == call["id"] })
+
+	// panel brygadzisty: tylko z hasłem, tylko odczyt
+	get := func(path, pass string) *http.Response {
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		if pass != "" {
+			req.SetBasicAuth("", pass)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	if r := get("/brygadzista", "zle"); r.StatusCode != 401 {
+		t.Fatalf("brygadzista zle haslo: %d", r.StatusCode)
+	}
+	if r := get("/admin", store.Config.ForemanPassword); r.StatusCode != 401 {
+		t.Fatalf("haslo brygadzisty nie moze otwierac panelu admina: %d", r.StatusCode)
+	}
+	if r := get("/brygadzista", store.Config.ForemanPassword); r.StatusCode != 200 {
+		t.Fatalf("brygadzista: %d", r.StatusCode)
+	}
+	r := get("/brygadzista/stan", store.Config.ForemanPassword)
+	var st struct {
+		Alerts    []alertInfo    `json:"alerts"`
+		Terminals []TerminalInfo `json:"terminals"`
+		Tablets   []TabletInfo   `json:"tablets"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&st)
+	if len(st.Alerts) != 1 || st.Alerts[0].Station != "KONTR_01" {
+		t.Fatalf("alerty w panelu: %+v", st.Alerts)
+	}
+	foundJan := false
+	for _, tm := range st.Terminals {
+		if tm.Worker == "Jan Brygadzista" {
+			foundJan = true
+			if tm.Battery != 55 || !tm.Charging || tm.Version != "1.3.0" || !tm.Foreman || tm.IP == "" {
+				t.Fatalf("terminal Jana: %+v", tm)
+			}
+		}
+	}
+	if !foundJan || len(st.Tablets) != 1 || st.Tablets[0].Version != "1.3.0" {
+		t.Fatalf("terminale/tablety: %+v %+v", st.Terminals, st.Tablets)
+	}
+	req, _ := http.NewRequest("POST", srv.URL+"/brygadzista", nil)
+	req.SetBasicAuth("", store.Config.ForemanPassword)
+	req.Header.Set("Origin", srv.URL)
+	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != 405 {
+		t.Fatalf("POST brygadzista: %d", resp.StatusCode)
+	}
+
+	// brygadzista przyjmuje alert, pracownik potwierdza: alert odwołany u wszystkich
+	jan.send(map[string]any{"t": "alert_ack", "id": call["id"]})
+	anna.send(map[string]any{"t": "ack", "id": call["id"]})
+	jan.wait("alert_cancel", func(m map[string]any) bool { return m["id"] == call["id"] })
+	ola.wait("alert_cancel", func(m map[string]any) bool { return m["id"] == call["id"] })
+	if len(hub.Alerts()) != 0 {
+		t.Fatal("alert nie zniknal")
+	}
+
+	// statystyki z dziennika
+	from, to := StatsPeriod("dzis", time.Now())
+	s := ComputeStats(store.dir, from, to)
+	if s.Total.Calls != 1 || s.Total.Acks != 1 || s.Total.Escalated != 1 || len(s.Stations) != 1 || s.Stations[0].Name != "KONTR_01" {
+		t.Fatalf("statystyki: %+v", s)
+	}
+	r = get("/admin/statystyki?okres=7dni", store.Config.AdminPassword)
+	if r.StatusCode != 200 {
+		t.Fatalf("statystyki admin: %d", r.StatusCode)
+	}
+}
+
+func TestStatsParse(t *testing.T) {
+	dir := t.TempDir()
+	loc := time.Local
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, loc)
+	csv := "\xef\xbb\xbfczas;zdarzenie;pracownik_id;pracownik;stanowisko;info\n" +
+		"2026-11-20 08:00:00;wezwanie;a;Anna;KONTR_02;\n" +
+		"2026-11-20 08:00:10;potwierdzenie;a;Anna;KONTR_02;10 s\n" +
+		"2026-11-20 09:00:00;wezwanie;a;Anna;KONTR_10;\n" +
+		"2026-11-20 09:00:30;potwierdzenie;a;Anna;KONTR_10;30 s\n" +
+		"2026-11-20 10:00:00;wezwanie;b;Bartek;KONTR_02;\n" +
+		"2026-11-20 10:05:00;wygasle;b;Bartek;KONTR_02;\n" +
+		"2026-11-14 10:00:00;wezwanie;b;Bartek;KONTR_02;\n"
+	if err := os.WriteFile(filepath.Join(dir, "zdarzenia-2026-11.csv"), []byte(csv), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	from, to := StatsPeriod("dzis", now)
+	s := ComputeStats(dir, from, to)
+	if s.Total.Calls != 3 || s.Total.Acks != 2 || s.Total.Expired != 1 || s.Total.AvgSec != 20 || s.Total.MedianSec != 20 || s.Total.MaxSec != 30 {
+		t.Fatalf("razem: %+v", s.Total)
+	}
+	if len(s.Stations) != 2 || s.Stations[0].Name != "KONTR_02" || s.Stations[1].Name != "KONTR_10" {
+		t.Fatalf("stoly: %+v", s.Stations)
+	}
+	from, to = StatsPeriod("7dni", now)
+	if s = ComputeStats(dir, from, to); s.Total.Calls != 4 {
+		t.Fatalf("7 dni: %+v", s.Total)
 	}
 }

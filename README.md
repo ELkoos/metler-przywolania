@@ -45,7 +45,7 @@ Gotowe pliki: zakładka **Actions** → ostatnia budowa → Artifacts. Po oznacz
 ### Pierwsze uruchomienie
 
 Serwer tworzy `dane/config.json` z hasłem do panelu i kluczem urządzeń (widoczne też w `dane/serwer.log`).
-Można też przed startem wgrać własny `dane/config.json` (`{"adminPassword":"…","deviceKey":"…"}`); brakujące pole serwer uzupełni.
+Można też przed startem wgrać własny `dane/config.json` (`{"adminPassword":"…","deviceKey":"…","foremanPassword":"…"}`); brakujące pole serwer uzupełni.
 Panel: `http://ADRES-SERWERA:8080/admin` (użytkownik dowolny, hasło z `config.json`).
 W panelu dodaj pracowników (imię i nazwisko, opcjonalnie PIN) i odczytaj **klucz urządzeń**.
 
@@ -67,6 +67,22 @@ cd android && ./gradlew assembleRelease -PdefaultServer=192.168.x.x:8080 -Pdefau
 Taki APK po pierwszym uruchomieniu sam zapisuje adres i klucz oraz wybiera tryb po ekranie
 (najkrótszy bok ≥ 600 dp = tablet, mniejszy = terminal). Ustawienia przetrwają późniejszą aktualizację zwykłym APK.
 Plik z kluczem nie powinien trafiać do publicznych wydań.
+
+### Brygadziści i panel brygadzisty
+
+- W panelu `/admin`, sekcja **Pracownicy**, zaznacz **Brygadzista**. Gdy wezwany pracownik nie potwierdzi wezwania w ciągu 60 s,
+  wszyscy zalogowani brygadziści dostają na terminalu czerwony ekran z alarmem („BRAK ODPOWIEDZI”, stół, pracownik).
+  Wezwanie pracownika trwa dalej. Alert znika sam, gdy pracownik potwierdzi, stół anuluje albo wezwanie wygaśnie;
+  „OK, WIEM” wycisza go na terminalu brygadzisty.
+- **Panel brygadzisty** `https://ADRES-SERWERA:8443/brygadzista`: tylko podgląd (stan na żywo, alerty z dźwiękiem, statystyki,
+  terminale). Hasło `foremanPassword` z `dane/config.json` (serwer tworzy je sam; widoczne też w panelu `/admin`).
+  Dźwięk alertów działa po jednym kliknięciu „Włącz dźwięk” po otwarciu strony (wymóg przeglądarek).
+
+### Panel: terminale i statystyki
+
+- **Terminale**: pracownik, adres IP, wersja aplikacji, bateria (aplikacja 1.3.0+ wysyła ją co 5 min).
+- **Statystyki czasu reakcji** (dziś / 7 dni / 30 dni), na pracownika i na stół, liczone z `dane/zdarzenia-RRRR-MM.csv`.
+  Nowe zdarzenia w dzienniku: `eskalacja` (alert do brygadzistów), `eskalacja_ok` (brygadzista przyjął alert).
 
 ### Stoły przypisywane w panelu
 

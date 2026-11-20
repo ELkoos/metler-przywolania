@@ -13,11 +13,15 @@ import (
 )
 
 type Client struct {
-	Role    string // tablet | terminal
-	Station string // nazwa stanowiska (tablet)
-	Device  string // identyfikator urządzenia
-	Remote  string
-	send    chan []byte
+	Role     string // tablet | terminal
+	Station  string // nazwa stanowiska (tablet)
+	Device   string // identyfikator urządzenia
+	Remote   string
+	Version  string // wersja aplikacji (z adresu połączenia)
+	Battery  int    // poziom baterii w %, -1 = nieznany (wiadomość "status")
+	Charging bool
+	Since    time.Time // początek połączenia
+	send     chan []byte
 }
 
 func (c *Client) Send(msg any) {
@@ -63,8 +67,12 @@ func wsHandler(h *Hub, store *Store) http.HandlerFunc {
 		if err != nil {
 			return
 		}
-		c := &Client{Role: role, Station: station, Device: device, Remote: r.RemoteAddr, send: make(chan []byte, 64)}
-		log.Printf("polaczono: %s %s %s %s", role, station, c.Device, c.Remote)
+		ver := strings.TrimSpace(q.Get("ver"))
+		if len(ver) > 32 {
+			ver = ver[:32]
+		}
+		c := &Client{Role: role, Station: station, Device: device, Remote: r.RemoteAddr, Version: ver, Battery: -1, Since: time.Now(), send: make(chan []byte, 64)}
+		log.Printf("polaczono: %s %s %s %s %s", role, station, c.Device, c.Remote, ver)
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 		h.Register(c)
