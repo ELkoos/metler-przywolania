@@ -105,7 +105,8 @@ class TabletActivity : Activity() {
             val mine = w.station == prefs.station
             val (bg, line2) = when (w.status) {
                 "wezwany" -> C.YELLOW_BG to (if (mine) "Wezwany · ${mmss(now - w.since)}" else "Wezwany: ${w.station}")
-                "brak_odpowiedzi" -> C.RED_BG to (if (mine) "Brak odpowiedzi · ${mmss(now - w.since)}" else "Brak odp.: ${w.station}")
+                "brak_odpowiedzi" -> C.RED_BG to (if (mine) "Brak odpowiedzi · ${mmss(now - w.since)}" +
+                        (if (w.escalated) "\nBrygadzista powiadomiony" else "") else "Brak odp.: ${w.station}")
                 "idzie" -> C.BLUE_BG to (if (mine) "Idzie do Ciebie ✓" else "Idzie do: ${w.station}")
                 "brak_polaczenia" -> C.GREY_BG to "Terminal bez połączenia"
                 else -> C.GREEN_BG to "Dostępny"

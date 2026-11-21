@@ -17,11 +17,15 @@ type Worker struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Pin  string `json:"pin"` // pusty = bez PIN-u
+	// Brygadzista dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s.
+	Foreman bool `json:"foreman,omitempty"`
 }
 
 type Config struct {
 	AdminPassword string `json:"adminPassword"`
 	DeviceKey     string `json:"deviceKey"`
+	// hasło do panelu brygadzisty (/brygadzista): tylko podgląd, bez edycji
+	ForemanPassword string `json:"foremanPassword"`
 }
 
 type Store struct {
@@ -50,7 +54,10 @@ func OpenStore(dir string) (*Store, bool, error) {
 			return nil, false, errors.New("config.json: " + err.Error())
 		}
 		// brakujące pola (np. plik przygotowany ręcznie tylko z kluczem) uzupełniamy
-		if s.Config.AdminPassword == "" || s.Config.DeviceKey == "" {
+		if s.Config.AdminPassword == "" || s.Config.DeviceKey == "" || s.Config.ForemanPassword == "" {
+			if s.Config.ForemanPassword == "" {
+				s.Config.ForemanPassword = randHex(4)
+			}
 			if s.Config.AdminPassword == "" {
 				s.Config.AdminPassword = randHex(6)
 			}
@@ -62,7 +69,7 @@ func OpenStore(dir string) (*Store, bool, error) {
 			}
 		}
 	} else if os.IsNotExist(err) {
-		s.Config = Config{AdminPassword: randHex(6), DeviceKey: randHex(4)}
+		s.Config = Config{AdminPassword: randHex(6), DeviceKey: randHex(4), ForemanPassword: randHex(4)}
 		if err := writeJSON(cfgPath, s.Config); err != nil {
 			return nil, false, err
 		}
@@ -155,7 +162,7 @@ func (s *Store) CheckPin(id, pin string) bool {
 	return false
 }
 
-func (s *Store) Upsert(id, name, pin string) error {
+func (s *Store) Upsert(id, name, pin string, foreman bool) error {
 	name = strings.TrimSpace(name)
 	pin = strings.TrimSpace(pin)
 	if name == "" {
@@ -178,13 +185,41 @@ func (s *Store) Upsert(id, name, pin string) error {
 			if s.workers[i].ID == id {
 				s.workers[i].Name = name
 				s.workers[i].Pin = pin
+				s.workers[i].Foreman = foreman
 				return s.saveLocked()
 			}
 		}
 		return errors.New("Nie znaleziono pracownika")
 	}
-	s.workers = append(s.workers, Worker{ID: randHex(4), Name: name, Pin: pin})
+	s.workers = append(s.workers, Worker{ID: randHex(4), Name: name, Pin: pin, Foreman: foreman})
 	return s.saveLocked()
+}
+
+// SetForeman zaznacza/odznacza brygadzistę.
+func (s *Store) SetForeman(id string, v bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.workers {
+		if s.workers[i].ID == id {
+			if s.workers[i].Foreman == v {
+				return nil
+			}
+			s.workers[i].Foreman = v
+			return s.saveLocked()
+		}
+	}
+	return errors.New("Nie znaleziono pracownika")
+}
+
+func (s *Store) IsForeman(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, w := range s.workers {
+		if w.ID == id {
+			return w.Foreman
+		}
+	}
+	return false
 }
 
 func (s *Store) Delete(id string) error {

@@ -18,10 +18,41 @@ var adminHTML string
 
 var adminTpl = template.Must(template.New("admin").Parse(adminHTML))
 
+//go:embed panel.js
+var panelJS string
+
+//go:embed brygadzista.html
+var foremanHTML string
+
+var foremanTpl = template.Must(template.New("brygadzista").Parse(foremanHTML))
+
 // 10 błędnych haseł z jednego adresu w 10 min = blokada panelu dla tego adresu na 15 min
 var adminLimiter = NewLimiter(10, 10*time.Minute, 15*time.Minute)
 
 func requireAdmin(store *Store, next http.HandlerFunc) http.HandlerFunc {
+	return requirePassword(func() string { return store.Config.AdminPassword }, "Przywolania - panel", next)
+}
+
+// requireForeman: panel brygadzisty przyjmuje hasło brygadzisty albo hasło administratora.
+func requireForeman(store *Store, next http.HandlerFunc) http.HandlerFunc {
+	return requirePasswords(func() []string { return []string{store.Config.ForemanPassword, store.Config.AdminPassword} }, "Przywolania - brygadzista", next)
+}
+
+func requirePassword(pass func() string, realm string, next http.HandlerFunc) http.HandlerFunc {
+	return requirePasswords(func() []string { return []string{pass()} }, realm, next)
+}
+
+func passOK(given string, valid []string) bool {
+	ok := false
+	for _, v := range valid {
+		if v != "" && subtle.ConstantTimeCompare([]byte(given), []byte(v)) == 1 {
+			ok = true
+		}
+	}
+	return ok
+}
+
+func requirePasswords(passes func() []string, realm string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Frame-Options", "DENY")
@@ -35,11 +66,11 @@ func requireAdmin(store *Store, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		_, pass, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(pass), []byte(store.Config.AdminPassword)) != 1 {
+		if !ok || !passOK(pass, passes()) {
 			if ok && adminLimiter.Fail(ip) {
 				log.Printf("blokada panelu dla adresu %s (za dużo błędnych haseł)", ip)
 			}
-			h.Set("WWW-Authenticate", `Basic realm="Przywolania - panel", charset="UTF-8"`)
+			h.Set("WWW-Authenticate", `Basic realm="`+realm+`", charset="UTF-8"`)
 			http.Error(w, "Wymagane logowanie", http.StatusUnauthorized)
 			return
 		}
@@ -78,7 +109,7 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 			var err error
 			switch r.FormValue("action") {
 			case "save":
-				err = store.Upsert(r.FormValue("id"), r.FormValue("name"), r.FormValue("pin"))
+				err = store.Upsert(r.FormValue("id"), r.FormValue("name"), r.FormValue("pin"), r.FormValue("foreman") == "1")
 			case "delete":
 				err = store.Delete(r.FormValue("id"))
 			case "station":
@@ -99,24 +130,52 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = adminTpl.Execute(w, map[string]any{
-			"Workers":   store.Workers(),
-			"Tablets":   h.Tablets(),
-			"DeviceKey": store.Config.DeviceKey,
-			"Msg":       msg,
-			"Version":   version,
+			"Workers":         store.Workers(),
+			"Tablets":         h.Tablets(),
+			"DeviceKey":       store.Config.DeviceKey,
+			"ForemanPassword": store.Config.ForemanPassword,
+			"Msg":             msg,
+			"Version":         version,
 		})
 	}))
-	mux.HandleFunc("/admin/stan", requireAdmin(store, func(w http.ResponseWriter, r *http.Request) {
-		tablets := h.Tablets()
-		terminals := 0
-		h.mu.Lock()
-		for c := range h.clients {
-			if c.Role == "terminal" {
-				terminals++
-			}
+	mux.HandleFunc("/panel.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte(panelJS))
+	})
+	mux.HandleFunc("/admin/stan", requireAdmin(store, liveState(h)))
+	mux.HandleFunc("/admin/statystyki", requireAdmin(store, statsHandler(h)))
+
+	// panel brygadzisty: tylko podgląd (stan na żywo, alerty, statystyki)
+	mux.HandleFunc("/brygadzista", requireForeman(store, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "Tylko podgląd", http.StatusMethodNotAllowed)
+			return
 		}
-		h.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"workers": h.State(), "tablets": tablets, "terminals": terminals})
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = foremanTpl.Execute(w, map[string]any{"Version": version})
 	}))
+	mux.HandleFunc("/brygadzista/stan", requireForeman(store, liveState(h)))
+	mux.HandleFunc("/brygadzista/statystyki", requireForeman(store, statsHandler(h)))
+}
+
+func liveState(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"workers":   h.State(),
+			"tablets":   h.Tablets(),
+			"terminals": h.Terminals(),
+			"alerts":    h.Alerts(),
+			"now":       time.Now().UnixMilli(),
+		})
+	}
+}
+
+func statsHandler(h *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		from, to := StatsPeriod(r.URL.Query().Get("okres"), time.Now())
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ComputeStats(h.calls.dir, from, to))
+	}
 }

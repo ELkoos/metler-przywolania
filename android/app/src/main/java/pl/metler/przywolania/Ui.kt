@@ -22,6 +22,7 @@ object C {
     val GREEN_BG = Color.parseColor("#D3F9D8")
     val GREY_BG = Color.parseColor("#E9ECEF")
     val YELLOW_BG = Color.parseColor("#FFE8A3")
+    val RED = Color.parseColor("#C92A2A")
     val RED_BG = Color.parseColor("#FFC9C9")
     val BLUE_BG = Color.parseColor("#D0EBFF")
     val TEXT = Color.parseColor("#1D1D1F")

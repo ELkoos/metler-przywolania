@@ -42,6 +42,15 @@
             android:taskAffinity="pl.metler.przywolania.call"
             android:turnScreenOn="true" />
 
+        <activity
+            android:name=".AlertActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="pl.metler.przywolania.alert"
+            android:turnScreenOn="true" />
+
         <service
             android:name=".LinkService"
             android:exported="false"

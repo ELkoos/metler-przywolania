@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel brygadzisty</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;color:#1d1d1f}
+h1{font-size:22px;margin:0 0 12px} h2{font-size:18px;margin:24px 0 8px} h3{font-size:15px;margin:14px 0 6px}
+.box{background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%} td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
+button{padding:6px 12px;font-size:15px;cursor:pointer}
+.st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:13px}
+.dostepny{background:#d9f2e1}.brak_polaczenia{background:#e5e5e5}.wezwany{background:#ffe7b3}.brak_odpowiedzi{background:#ffc9c9}.idzie{background:#cfe3ff}
+code{background:#eef;padding:2px 6px;border-radius:4px}
+.tag{display:inline-block;padding:1px 6px;border-radius:8px;font-size:12px;background:#e8e0ff}.tag.red{background:#d62828;color:#fff}
+.alerts{margin-bottom:10px}.alert{background:#d62828;color:#fff;padding:14px 16px;border-radius:8px;margin-bottom:8px;font-size:22px}
+.low{color:#b00020;font-weight:600}
+button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1px solid #1d1d1f}
+#dzwiek{background:#ffe7b3;border:1px solid #e0b850;padding:10px;border-radius:8px;margin-bottom:12px}
+#dzwiek.on{background:#d9f2e1;border-color:#9fd3b0}
+.err{color:#b00020}
+</style>
+</head>
+<body>
+<h1>Panel brygadzisty</h1>
+<div id="dzwiek">Dźwięk alertów wyłączony. <button id="wlacz">Włącz dźwięk</button> (przeglądarka wymaga jednego kliknięcia po otwarciu strony)</div>
+<div id="alerty"></div>
+
+<h2>Teraz</h2>
+<div class="box" id="stan">Ładowanie…</div>
+
+<h2>Statystyki czasu reakcji</h2>
+<div class="box" id="statystyki">Ładowanie…</div>
+
+<h2>Terminale</h2>
+<div class="box" id="terminale">Ładowanie…</div>
+
+<p style="color:#777;font-size:13px">Odświeżanie co 3 s · wersja serwera {{.Version}}</p>
+
+<script src="/panel.js"></script>
+<script>
+let ctx=null, beepTimer=null, alertCount=0;
+const box=document.getElementById('dzwiek');
+document.getElementById('wlacz').onclick=()=>{
+  try{ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
+  box.className='on'; box.textContent='Dźwięk alertów włączony.';
+  beep();
+};
+function beep(){
+  if(!ctx)return;
+  const t=ctx.currentTime;
+  for(let i=0;i<3;i++){
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=880;g.gain.value=0.25;
+    o.connect(g);g.connect(ctx.destination);
+    o.start(t+i*0.3);o.stop(t+i*0.3+0.18);
+  }
+}
+function sound(on){
+  if(on&&!beepTimer){beep();beepTimer=setInterval(beep,4000)}
+  if(!on&&beepTimer){clearInterval(beepTimer);beepTimer=null}
+}
+async function load(){
+ try{
+  const r=await fetch('/brygadzista/stan',{cache:'no-store'});
+  if(!r.ok)throw new Error();
+  const d=await r.json();
+  document.getElementById('alerty').innerHTML=renderAlerts(d);
+  document.getElementById('stan').innerHTML=renderLive(d);
+  document.getElementById('terminale').innerHTML=renderTerminals(d);
+  sound(d.alerts.length>0);
+  document.title=(d.alerts.length?'('+d.alerts.length+') ALERT – ':'')+'Panel brygadzisty';
+ }catch(e){document.getElementById('stan').innerHTML='<span class="err">Brak połączenia z serwerem</span>';sound(false)}
+}
+load(); setInterval(load,3000);
+loadStats('/brygadzista'); setInterval(()=>loadStats('/brygadzista'),60000);
+</script>
+</body>
+</html>
