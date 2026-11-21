@@ -18,11 +18,15 @@ h3{font-size:15px;margin:14px 0 6px}
 .tag{display:inline-block;padding:1px 6px;border-radius:8px;font-size:12px;background:#e8e0ff}.tag.red{background:#d62828;color:#fff}
 .alerts{margin-bottom:10px}.alert{background:#d62828;color:#fff;padding:10px 12px;border-radius:6px;margin-bottom:6px;font-size:17px}
 .low{color:#b00020;font-weight:600}
+nav.tabs{display:flex;gap:4px;margin:0 0 16px;border-bottom:2px solid #dcdfe4}
+nav.tabs a{padding:8px 16px;text-decoration:none;color:#1d1d1f;border-radius:6px 6px 0 0}
+nav.tabs a.on{background:#1d1d1f;color:#fff}
 button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1px solid #1d1d1f}
 </style>
 </head>
 <body>
 <h1>Przywołania do stolika pakującego</h1>
+<nav class="tabs"><a href="/admin" class="on">Panel</a><a href="/admin/raporty">Raporty</a></nav>
 {{if .Msg}}<div class="err">{{.Msg}}</div>{{end}}
 
 <div class="box">
@@ -36,9 +40,6 @@ Wersja serwera: {{.Version}}
 
 <h2>Terminale</h2>
 <div class="box" id="terminale">Ładowanie…</div>
-
-<h2>Statystyki czasu reakcji</h2>
-<div class="box" id="statystyki">Ładowanie…</div>
 
 <h2>Pracownicy</h2>
 <div class="box">
@@ -95,7 +96,6 @@ async function load(){
  }catch(e){document.getElementById('stan').textContent='Brak połączenia z serwerem'}
 }
 load(); setInterval(load,3000);
-loadStats('/admin'); setInterval(()=>loadStats('/admin'),60000);
 </script>
 </body>
 </html>

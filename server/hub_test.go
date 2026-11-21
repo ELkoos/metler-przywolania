@@ -405,6 +405,9 @@ func TestEscalation(t *testing.T) {
 	if r := get("/brygadzista", ""); r.StatusCode != 200 {
 		t.Fatalf("brygadzista z sesja: %d", r.StatusCode)
 	}
+	if r := get("/brygadzista/raporty", ""); r.StatusCode != 200 {
+		t.Fatalf("raporty brygadzisty: %d", r.StatusCode)
+	}
 	r = get("/brygadzista/stan", "")
 
 	var st struct {
@@ -534,5 +537,45 @@ func TestPinStorage(t *testing.T) {
 	}
 	if err := store.UpsertPin("a1", "Anna", "ma spacje", false, true); err == nil {
 		t.Fatal("PIN ze spacja przyjety")
+	}
+}
+
+func TestReports(t *testing.T) {
+	store, _, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := NewHub(store, NewCallLog(store.dir))
+	hub.calls.Write("wezwanie", "a", "Anna", "KONTR_01", "")
+	_ = os.WriteFile(filepath.Join(store.dir, "inny.txt"), []byte("tajne"), 0o600)
+	mux := http.NewServeMux()
+	adminRoutes(mux, hub, store)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	get := func(path string) (int, string) {
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		req.SetBasicAuth("", store.Config.AdminPassword)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	month := time.Now().Format("2006-01")
+	code, body := get("/admin/raporty")
+	if code != 200 || !strings.Contains(body, "zdarzenia-"+month+".csv") {
+		t.Fatalf("raporty: %d", code)
+	}
+	if code, body = get("/admin/dziennik?plik=zdarzenia-" + month + ".csv"); code != 200 || !strings.Contains(body, "KONTR_01") {
+		t.Fatalf("pobranie: %d %s", code, body)
+	}
+	for _, bad := range []string{"inny.txt", "../config.json", "config.json", "zdarzenia-2026-11.csv/../config.json"} {
+		if code, _ = get("/admin/dziennik?plik=" + url.QueryEscape(bad)); code != 404 {
+			t.Fatalf("%s: %d", bad, code)
+		}
+	}
+	if code, body = get("/admin"); code != 200 || strings.Contains(body, `id="statystyki"`) || !strings.Contains(body, "/admin/raporty") {
+		t.Fatalf("panel bez statystyk, z zakladka: %d", code)
 	}
 }

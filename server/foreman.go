@@ -32,6 +32,11 @@ var sessionKey = func() []byte {
 //go:embed brygadzista-logowanie.html
 var foremanLoginHTML string
 
+//go:embed brygadzista-raporty.html
+var foremanReportsHTML string
+
+var foremanReportsTpl = template.Must(template.New("raporty-bryg").Parse(foremanReportsHTML))
+
 var foremanLoginTpl = template.Must(template.New("logowanie").Parse(foremanLoginHTML))
 
 func signForeman(id, pin string, exp int64) string {
@@ -90,7 +95,7 @@ func requireForeman(store *Store, next func(w http.ResponseWriter, r *http.Reque
 			next(w, r, "administrator")
 			return
 		}
-		if r.URL.Path == "/brygadzista" {
+		if r.URL.Path == "/brygadzista" || r.URL.Path == "/brygadzista/raporty" {
 			http.Redirect(w, r, "/brygadzista/logowanie", http.StatusSeeOther)
 			return
 		}
@@ -102,6 +107,10 @@ func foremanRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 	mux.HandleFunc("/brygadzista", requireForeman(store, func(w http.ResponseWriter, r *http.Request, who string) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = foremanTpl.Execute(w, map[string]any{"Version": version, "Who": who})
+	}))
+	mux.HandleFunc("/brygadzista/raporty", requireForeman(store, func(w http.ResponseWriter, r *http.Request, who string) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = foremanReportsTpl.Execute(w, map[string]any{"Who": who})
 	}))
 	mux.HandleFunc("/brygadzista/stan", requireForeman(store, func(w http.ResponseWriter, r *http.Request, _ string) { liveState(h)(w, r) }))
 	mux.HandleFunc("/brygadzista/statystyki", requireForeman(store, func(w http.ResponseWriter, r *http.Request, _ string) { statsHandler(h)(w, r) }))

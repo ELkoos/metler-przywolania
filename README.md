@@ -81,6 +81,11 @@ Plik z kluczem nie powinien trafiać do publicznych wydań.
   „Brygadzista” i ustawionym PIN-em. Odznaczenie albo zmiana PIN-u kończy sesję od razu; sesja trwa 12 h (restart serwera = nowe logowanie).
   Hasło administratora też otwiera ten panel. Dźwięk alertów działa po jednym kliknięciu „Włącz dźwięk” po otwarciu strony (wymóg przeglądarek).
 
+### Panel: zakładki
+
+- `/admin`: **Panel** (stan na żywo, terminale, pracownicy, tablety) i **Raporty** (statystyki + pobieranie miesięcznych plików dziennika CSV).
+- `/brygadzista`: **Podgląd** (tylko bieżące zdarzenia, alerty z dźwiękiem, terminale) i **Raporty** (statystyki; alert widoczny jako pasek).
+
 ### Panel: terminale i statystyki
 
 - **Terminale**: pracownik, adres IP, wersja aplikacji, bateria (aplikacja 1.3.0+ wysyła ją co 5 min).

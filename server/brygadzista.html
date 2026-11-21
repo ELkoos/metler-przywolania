@@ -20,19 +20,20 @@ button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1
 #dzwiek{background:#ffe7b3;border:1px solid #e0b850;padding:10px;border-radius:8px;margin-bottom:12px}
 #dzwiek.on{background:#d9f2e1;border-color:#9fd3b0}
 .err{color:#b00020}
+nav.tabs{display:flex;gap:4px;margin:0 0 16px;border-bottom:2px solid #dcdfe4}
+nav.tabs a{padding:8px 16px;text-decoration:none;color:#1d1d1f;border-radius:6px 6px 0 0}
+nav.tabs a.on{background:#1d1d1f;color:#fff}
 </style>
 </head>
 <body>
 <h1>Panel brygadzisty</h1>
 <p style="margin:-6px 0 12px;color:#555">Zalogowany: <b>{{.Who}}</b> · <a href="/brygadzista/wyloguj">Wyloguj</a></p>
+<nav class="tabs"><a href="/brygadzista" class="on">Podgląd</a><a href="/brygadzista/raporty">Raporty</a></nav>
 <div id="dzwiek">Dźwięk alertów wyłączony. <button id="wlacz">Włącz dźwięk</button> (przeglądarka wymaga jednego kliknięcia po otwarciu strony)</div>
 <div id="alerty"></div>
 
 <h2>Teraz</h2>
 <div class="box" id="stan">Ładowanie…</div>
-
-<h2>Statystyki czasu reakcji</h2>
-<div class="box" id="statystyki">Ładowanie…</div>
 
 <h2>Terminale</h2>
 <div class="box" id="terminale">Ładowanie…</div>
@@ -75,7 +76,6 @@ async function load(){
  }catch(e){document.getElementById('stan').innerHTML='<span class="err">Brak połączenia z serwerem</span>';sound(false)}
 }
 load(); setInterval(load,3000);
-loadStats('/brygadzista'); setInterval(()=>loadStats('/brygadzista'),60000);
 </script>
 </body>
 </html>
