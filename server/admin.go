@@ -141,6 +141,7 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 	mux.HandleFunc("/admin/statystyki", requireAdmin(store, statsHandler(h)))
 
 	foremanRoutes(mux, h, store)
+	reportRoutes(mux, h, store)
 }
 
 func liveState(h *Hub) http.HandlerFunc {
