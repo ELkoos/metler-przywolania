@@ -89,8 +89,9 @@ class TerminalActivity : Activity() {
     private fun onPick(w: PublicWorker) {
         if (!w.hasPin) { login(w, ""); return }
         val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            hint = "PIN"; textSize = 22f
+            // PIN albo hasło z WMS: litery, cyfry i znaki specjalne
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "PIN / hasło"; textSize = 22f
         }
         AlertDialog.Builder(this)
             .setTitle(w.name)

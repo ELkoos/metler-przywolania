@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel brygadzisty – logowanie</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;color:#1d1d1f}
+.box{background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:20px;max-width:360px;margin:40px auto}
+h1{font-size:22px;margin:0 0 16px} label{display:block;margin:12px 0 4px;font-weight:600}
+select,input{width:100%;box-sizing:border-box;padding:10px;font-size:17px} button{margin-top:16px;width:100%;padding:12px;font-size:17px;cursor:pointer}
+.err{background:#fde8e8;border:1px solid #f5b5b5;padding:8px;border-radius:6px;margin-bottom:8px}
+p{color:#555;font-size:14px}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>Panel brygadzisty</h1>
+{{if .Msg}}<div class="err">{{.Msg}}</div>{{end}}
+{{if .Foremen}}
+<form method="post">
+<label for="id">Login</label>
+<select id="id" name="id" required>
+{{range .Foremen}}<option value="{{.ID}}"{{if eq .ID $.Sel}} selected{{end}}>{{.Name}}</option>{{end}}
+</select>
+<label for="pin">PIN / hasło (to samo co na terminalu)</label>
+<input id="pin" name="pin" type="password" maxlength="64" autocomplete="current-password" required autofocus>
+<button>Zaloguj</button>
+</form>
+{{else}}
+<p>Brak brygadzistów z PIN-em. W panelu administratora zaznacz „Brygadzista” i ustaw PIN.</p>
+{{end}}
+</div>
+</body>
+</html>
