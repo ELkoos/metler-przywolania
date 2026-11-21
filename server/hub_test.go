@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -297,14 +298,11 @@ func TestEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = store.Upsert("", "Anna Nowak", "", false)
-	_ = store.Upsert("", "Jan Brygadzista", "", true)
+	_ = store.Upsert("", "Jan Brygadzista", "1111", true)
 	_ = store.Upsert("", "Ola Brygadzista", "", true)
 	ids := map[string]string{}
 	for _, w := range store.Workers() {
 		ids[w.Name] = w.ID
-	}
-	if store.Config.ForemanPassword == "" {
-		t.Fatal("brak hasla brygadzisty")
 	}
 	hub := NewHub(store, NewCallLog(store.dir))
 	mux := http.NewServeMux()
@@ -318,7 +316,7 @@ func TestEscalation(t *testing.T) {
 	anna.send(map[string]any{"t": "login", "worker": ids["Anna Nowak"]})
 	anna.wait("login_ok", nil)
 	jan := dial(t, srv.URL, url.Values{"role": {"terminal"}, "key": {key}, "device": {"T2"}, "ver": {"1.3.0"}})
-	jan.send(map[string]any{"t": "login", "worker": ids["Jan Brygadzista"]})
+	jan.send(map[string]any{"t": "login", "worker": ids["Jan Brygadzista"], "pin": "1111"})
 	jan.wait("login_ok", nil)
 	jan.send(map[string]any{"t": "status", "battery": 55, "charging": true})
 
@@ -352,27 +350,63 @@ func TestEscalation(t *testing.T) {
 	ola.wait("alert", func(m map[string]any) bool { return m["id"] == call["id"] })
 
 	// panel brygadzisty: tylko z hasłem, tylko odczyt
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var cookie *http.Cookie
 	get := func(path, pass string) *http.Response {
 		req, _ := http.NewRequest("GET", srv.URL+path, nil)
 		if pass != "" {
 			req.SetBasicAuth("", pass)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		resp, err := noRedirect.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return resp
 	}
-	if r := get("/brygadzista", "zle"); r.StatusCode != 401 {
-		t.Fatalf("brygadzista zle haslo: %d", r.StatusCode)
+	login := func(id, pin string) *http.Response {
+		req, _ := http.NewRequest("POST", srv.URL+"/brygadzista/logowanie", strings.NewReader(url.Values{"id": {id}, "pin": {pin}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", srv.URL)
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
 	}
-	if r := get("/admin", store.Config.ForemanPassword); r.StatusCode != 401 {
-		t.Fatalf("haslo brygadzisty nie moze otwierac panelu admina: %d", r.StatusCode)
+	// bez sesji: przekierowanie na logowanie, dane 401
+	if r := get("/brygadzista", ""); r.StatusCode != 303 || r.Header.Get("Location") != "/brygadzista/logowanie" {
+		t.Fatalf("brygadzista bez sesji: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
-	if r := get("/brygadzista", store.Config.ForemanPassword); r.StatusCode != 200 {
-		t.Fatalf("brygadzista: %d", r.StatusCode)
+	if r := get("/brygadzista/stan", ""); r.StatusCode != 401 {
+		t.Fatalf("stan bez sesji: %d", r.StatusCode)
 	}
-	r := get("/brygadzista/stan", store.Config.ForemanPassword)
+	// strona logowania pokazuje tylko brygadzistów z PIN-em
+	lp := get("/brygadzista/logowanie", "")
+	body, _ := io.ReadAll(lp.Body)
+	if !strings.Contains(string(body), "Jan Brygadzista") || strings.Contains(string(body), "Ola Brygadzista") || strings.Contains(string(body), "Anna Nowak") {
+		t.Fatalf("lista na stronie logowania: %s", body)
+	}
+	// zły PIN, brygadzista bez PIN-u, zwykły pracownik: odmowa
+	for _, c := range [][2]string{{ids["Jan Brygadzista"], "9999"}, {ids["Ola Brygadzista"], ""}, {ids["Anna Nowak"], ""}} {
+		if r := login(c[0], c[1]); r.StatusCode != 200 || len(r.Cookies()) != 0 {
+			t.Fatalf("logowanie %v powinno sie nie udac: %d", c, r.StatusCode)
+		}
+	}
+	pinLimiter.Success("w:" + ids["Jan Brygadzista"])
+	adminLimiter.Success("127.0.0.1")
+	r := login(ids["Jan Brygadzista"], "1111")
+	if r.StatusCode != 303 || len(r.Cookies()) != 1 {
+		t.Fatalf("logowanie Jana: %d", r.StatusCode)
+	}
+	cookie = r.Cookies()[0]
+	if r := get("/brygadzista", ""); r.StatusCode != 200 {
+		t.Fatalf("brygadzista z sesja: %d", r.StatusCode)
+	}
+	r = get("/brygadzista/stan", "")
+
 	var st struct {
 		Alerts    []alertInfo    `json:"alerts"`
 		Terminals []TerminalInfo `json:"terminals"`
@@ -395,10 +429,23 @@ func TestEscalation(t *testing.T) {
 		t.Fatalf("terminale/tablety: %+v %+v", st.Terminals, st.Tablets)
 	}
 	req, _ := http.NewRequest("POST", srv.URL+"/brygadzista", nil)
-	req.SetBasicAuth("", store.Config.ForemanPassword)
+	req.AddCookie(cookie)
 	req.Header.Set("Origin", srv.URL)
 	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != 405 {
 		t.Fatalf("POST brygadzista: %d", resp.StatusCode)
+	}
+	// sesja nie otwiera panelu administratora
+	if r := get("/admin", ""); r.StatusCode != 401 {
+		t.Fatalf("admin z sesja brygadzisty: %d", r.StatusCode)
+	}
+	// zmiana PIN-u kończy sesję; hasło administratora otwiera panel brygadzisty
+	_ = store.Upsert(ids["Jan Brygadzista"], "Jan Brygadzista", "2222", true)
+	if r := get("/brygadzista/stan", ""); r.StatusCode != 401 {
+		t.Fatalf("sesja po zmianie PIN-u: %d", r.StatusCode)
+	}
+	cookie = nil
+	if r := get("/brygadzista/stan", store.Config.AdminPassword); r.StatusCode != 200 {
+		t.Fatalf("brygadzista haslem admina: %d", r.StatusCode)
 	}
 
 	// brygadzista przyjmuje alert, pracownik potwierdza: alert odwołany u wszystkich
@@ -448,5 +495,44 @@ func TestStatsParse(t *testing.T) {
 	from, to = StatsPeriod("7dni", now)
 	if s = ComputeStats(dir, from, to); s.Total.Calls != 4 {
 		t.Fatalf("7 dni: %+v", s.Total)
+	}
+}
+
+func TestPinStorage(t *testing.T) {
+	dir := t.TempDir()
+	// workers.json z wersji 1.3.0: PIN otwartym tekstem
+	old := `[{"id":"a1","name":"Anna","pin":"1234","foreman":true},{"id":"b2","name":"Bartek","pin":""}]`
+	if err := os.WriteFile(filepath.Join(dir, "workers.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, _, err := OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, "workers.json"))
+	if strings.Contains(string(raw), `"1234"`) || !strings.Contains(string(raw), "pbkdf2-sha256$") {
+		t.Fatalf("PIN nie zamieniony na skrot: %s", raw)
+	}
+	if !store.CheckPin("a1", "1234") || store.CheckPin("a1", "1235") || !store.CheckPin("b2", "") || store.CheckPin("b2", "x") {
+		t.Fatal("CheckPin po migracji")
+	}
+	// hasło z literami i znakami (np. z WMS)
+	if err := store.UpsertPin("a1", "Anna", "Wms#2026xY", false, true); err != nil {
+		t.Fatal(err)
+	}
+	if !store.CheckPin("a1", "Wms#2026xY") || store.CheckPin("a1", "1234") || !store.ForemanLogin("a1", "Wms#2026xY") {
+		t.Fatal("haslo alfanumeryczne")
+	}
+	// pusty PIN przy zapisie = bez zmian; "usuń" = bez PIN-u
+	_ = store.UpsertPin("a1", "Anna", "", false, true)
+	if !store.CheckPin("a1", "Wms#2026xY") {
+		t.Fatal("pusty PIN zmienil haslo")
+	}
+	_ = store.UpsertPin("a1", "Anna", "", true, true)
+	if !store.CheckPin("a1", "") || store.ForemanLogin("a1", "") {
+		t.Fatal("usuniecie PIN-u")
+	}
+	if err := store.UpsertPin("a1", "Anna", "ma spacje", false, true); err == nil {
+		t.Fatal("PIN ze spacja przyjety")
 	}
 }

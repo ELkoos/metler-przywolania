@@ -9,7 +9,7 @@ body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px;backg
 h1{font-size:22px;margin:0 0 12px} h2{font-size:18px;margin:24px 0 8px}
 .box{background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
 table{border-collapse:collapse;width:100%} td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
-input{padding:6px;font-size:15px} input[name=pin]{width:90px} button{padding:6px 12px;font-size:15px;cursor:pointer}
+input{padding:6px;font-size:15px} input[name=pin]{width:170px} button{padding:6px 12px;font-size:15px;cursor:pointer}
 .err{background:#fde8e8;border:1px solid #f5b5b5;padding:8px;border-radius:6px;margin-bottom:12px}
 .st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:13px}
 .dostepny{background:#d9f2e1}.brak_polaczenia{background:#e5e5e5}.wezwany{background:#ffe7b3}.brak_odpowiedzi{background:#ffc9c9}.idzie{background:#cfe3ff}
@@ -27,7 +27,7 @@ button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1
 
 <div class="box">
 <b>Klucz urządzeń</b> (wpisz w ustawieniach aplikacji na tabletach i terminalach): <code>{{.DeviceKey}}</code><br>
-Hasło panelu brygadzisty (<code>/brygadzista</code>, tylko podgląd): <code>{{.ForemanPassword}}</code><br>
+Panel brygadzisty: <code>/brygadzista</code> (tylko podgląd, logowanie loginem i PIN-em brygadzisty)<br>
 Wersja serwera: {{.Version}}
 </div>
 
@@ -43,19 +43,19 @@ Wersja serwera: {{.Version}}
 <h2>Pracownicy</h2>
 <div class="box">
 <table>
-<tr><th>Imię i nazwisko</th><th>PIN (puste = bez PIN-u)</th><th title="Dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s">Brygadzista</th><th></th><th></th></tr>
+<tr><th>Login</th><th>PIN / hasło (litery, cyfry, znaki; niewidoczne po zapisaniu)</th><th title="Dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s">Brygadzista</th><th></th><th></th></tr>
 {{range .Workers}}
 <tr>
 <td><input form="f{{.ID}}" name="name" value="{{.Name}}" required></td>
-<td><input form="f{{.ID}}" name="pin" value="{{.Pin}}" inputmode="numeric" pattern="[0-9]*" maxlength="8"></td>
-<td><input form="f{{.ID}}" type="checkbox" name="foreman" value="1"{{if .Foreman}} checked{{end}}></td>
+<td><input form="f{{.ID}}" name="pin" type="password" autocomplete="new-password" maxlength="64" placeholder="{{if .PinHash}}ustawiony – wpisz nowy{{else}}brak PIN-u{{end}}">{{if .PinHash}} <label title="Usuń PIN"><input form="f{{.ID}}" type="checkbox" name="nopin" value="1"> usuń</label>{{end}}</td>
+<td><input form="f{{.ID}}" type="checkbox" name="foreman" value="1"{{if .Foreman}} checked{{end}}>{{if and .Foreman (not .PinHash)}} <span class="tag red" title="Bez PIN-u nie zaloguje się do panelu brygadzisty">brak PIN-u</span>{{end}}</td>
 <td><form id="f{{.ID}}" method="post"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="save"><button>Zapisz</button></form></td>
 <td><form method="post" onsubmit="return confirm('Usunąć pracownika?')"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="delete"><button>Usuń</button></form></td>
 </tr>
 {{end}}
 <tr>
 <td><input form="fnew" name="name" placeholder="Nowy pracownik" required></td>
-<td><input form="fnew" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"></td>
+<td><input form="fnew" name="pin" type="password" autocomplete="new-password" maxlength="64" placeholder="opcjonalnie"></td>
 <td><input form="fnew" type="checkbox" name="foreman" value="1"></td>
 <td><form id="fnew" method="post"><input type="hidden" name="action" value="save"><button>Dodaj</button></form></td><td></td>
 </tr>

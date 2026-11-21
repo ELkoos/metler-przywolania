@@ -33,11 +33,6 @@ func requireAdmin(store *Store, next http.HandlerFunc) http.HandlerFunc {
 	return requirePassword(func() string { return store.Config.AdminPassword }, "Przywolania - panel", next)
 }
 
-// requireForeman: panel brygadzisty przyjmuje hasło brygadzisty albo hasło administratora.
-func requireForeman(store *Store, next http.HandlerFunc) http.HandlerFunc {
-	return requirePasswords(func() []string { return []string{store.Config.ForemanPassword, store.Config.AdminPassword} }, "Przywolania - brygadzista", next)
-}
-
 func requirePassword(pass func() string, realm string, next http.HandlerFunc) http.HandlerFunc {
 	return requirePasswords(func() []string { return []string{pass()} }, realm, next)
 }
@@ -109,7 +104,7 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 			var err error
 			switch r.FormValue("action") {
 			case "save":
-				err = store.Upsert(r.FormValue("id"), r.FormValue("name"), r.FormValue("pin"), r.FormValue("foreman") == "1")
+				err = store.UpsertPin(r.FormValue("id"), r.FormValue("name"), r.FormValue("pin"), r.FormValue("nopin") == "1", r.FormValue("foreman") == "1")
 			case "delete":
 				err = store.Delete(r.FormValue("id"))
 			case "station":
@@ -130,12 +125,11 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = adminTpl.Execute(w, map[string]any{
-			"Workers":         store.Workers(),
-			"Tablets":         h.Tablets(),
-			"DeviceKey":       store.Config.DeviceKey,
-			"ForemanPassword": store.Config.ForemanPassword,
-			"Msg":             msg,
-			"Version":         version,
+			"Workers":   store.Workers(),
+			"Tablets":   h.Tablets(),
+			"DeviceKey": store.Config.DeviceKey,
+			"Msg":       msg,
+			"Version":   version,
 		})
 	}))
 	mux.HandleFunc("/panel.js", func(w http.ResponseWriter, r *http.Request) {
@@ -146,17 +140,7 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 	mux.HandleFunc("/admin/stan", requireAdmin(store, liveState(h)))
 	mux.HandleFunc("/admin/statystyki", requireAdmin(store, statsHandler(h)))
 
-	// panel brygadzisty: tylko podgląd (stan na żywo, alerty, statystyki)
-	mux.HandleFunc("/brygadzista", requireForeman(store, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, "Tylko podgląd", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = foremanTpl.Execute(w, map[string]any{"Version": version})
-	}))
-	mux.HandleFunc("/brygadzista/stan", requireForeman(store, liveState(h)))
-	mux.HandleFunc("/brygadzista/statystyki", requireForeman(store, statsHandler(h)))
+	foremanRoutes(mux, h, store)
 }
 
 func liveState(h *Hub) http.HandlerFunc {

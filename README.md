@@ -45,9 +45,11 @@ Gotowe pliki: zakładka **Actions** → ostatnia budowa → Artifacts. Po oznacz
 ### Pierwsze uruchomienie
 
 Serwer tworzy `dane/config.json` z hasłem do panelu i kluczem urządzeń (widoczne też w `dane/serwer.log`).
-Można też przed startem wgrać własny `dane/config.json` (`{"adminPassword":"…","deviceKey":"…","foremanPassword":"…"}`); brakujące pole serwer uzupełni.
+Można też przed startem wgrać własny `dane/config.json` (`{"adminPassword":"…","deviceKey":"…"}`); brakujące pole serwer uzupełni.
 Panel: `http://ADRES-SERWERA:8080/admin` (użytkownik dowolny, hasło z `config.json`).
-W panelu dodaj pracowników (imię i nazwisko, opcjonalnie PIN) i odczytaj **klucz urządzeń**.
+W panelu dodaj pracowników (login, opcjonalnie PIN/hasło: litery, cyfry i znaki, bez spacji, do 64 znaków) i odczytaj **klucz urządzeń**.
+PIN-y są zapisywane w `dane/workers.json` jako skrót PBKDF2-SHA256 (nie otwartym tekstem) i nie są wyświetlane w panelu;
+puste pole przy zapisie = PIN bez zmian, „usuń” = pracownik bez PIN-u.
 
 Serwer powinien mieć stały adres IP (rezerwacja DHCP). Tablety i terminale muszą mieć do niego dostęp na porcie 8080
 (ta sama sieć Wi-Fi albo routing między VLAN-ami, bez izolacji klientów blokującej ruch do serwera).
@@ -75,8 +77,9 @@ Plik z kluczem nie powinien trafiać do publicznych wydań.
   Wezwanie pracownika trwa dalej. Alert znika sam, gdy pracownik potwierdzi, stół anuluje albo wezwanie wygaśnie;
   „OK, WIEM” wycisza go na terminalu brygadzisty.
 - **Panel brygadzisty** `https://ADRES-SERWERA:8443/brygadzista`: tylko podgląd (stan na żywo, alerty z dźwiękiem, statystyki,
-  terminale). Hasło `foremanPassword` z `dane/config.json` (serwer tworzy je sam; widoczne też w panelu `/admin`).
-  Dźwięk alertów działa po jednym kliknięciu „Włącz dźwięk” po otwarciu strony (wymóg przeglądarek).
+  terminale). Logowanie: login z listy + ten sam PIN/hasło co na terminalu; wchodzą tylko pracownicy z zaznaczonym
+  „Brygadzista” i ustawionym PIN-em. Odznaczenie albo zmiana PIN-u kończy sesję od razu; sesja trwa 12 h (restart serwera = nowe logowanie).
+  Hasło administratora też otwiera ten panel. Dźwięk alertów działa po jednym kliknięciu „Włącz dźwięk” po otwarciu strony (wymóg przeglądarek).
 
 ### Panel: terminale i statystyki
 
