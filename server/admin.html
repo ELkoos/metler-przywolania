@@ -3,69 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Przywołania – panel</title>
-<style>
-body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px;background:#f4f5f7;color:#1d1d1f}
-h1{font-size:22px;margin:0 0 12px} h2{font-size:18px;margin:24px 0 8px}
-.box{background:#fff;border:1px solid #dcdfe4;border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
-table{border-collapse:collapse;width:100%} td,th{padding:6px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
-input{padding:6px;font-size:15px} input[name=pin]{width:170px} button{padding:6px 12px;font-size:15px;cursor:pointer}
-.err{background:#fde8e8;border:1px solid #f5b5b5;padding:8px;border-radius:6px;margin-bottom:12px}
-.st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:13px}
-.dostepny{background:#d9f2e1}.brak_polaczenia{background:#e5e5e5}.wezwany{background:#ffe7b3}.brak_odpowiedzi{background:#ffc9c9}.idzie{background:#cfe3ff}
-code{background:#eef;padding:2px 6px;border-radius:4px}
-h3{font-size:15px;margin:14px 0 6px}
-.tag{display:inline-block;padding:1px 6px;border-radius:8px;font-size:12px;background:#e8e0ff}.tag.red{background:#d62828;color:#fff}
-.alerts{margin-bottom:10px}.alert{background:#d62828;color:#fff;padding:10px 12px;border-radius:6px;margin-bottom:6px;font-size:17px}
-.low{color:#b00020;font-weight:600}
-nav.tabs{display:flex;gap:4px;margin:0 0 16px;border-bottom:2px solid #dcdfe4}
-nav.tabs a{padding:8px 16px;text-decoration:none;color:#1d1d1f;border-radius:6px 6px 0 0}
-nav.tabs a.on{background:#1d1d1f;color:#fff}
-button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1px solid #1d1d1f}
-</style>
+<title>Przywołania – panel administratora</title>
+<link rel="stylesheet" href="/panel.css">
 </head>
 <body>
-<h1>Przywołania do stolika pakującego</h1>
-<nav class="tabs"><a href="/admin" class="on">Panel</a><a href="/admin/raporty">Raporty</a></nav>
+<header class="bar"><div class="in">
+<div class="brand">Przywołania<small>panel administratora</small></div>
+<nav class="menu">
+<a href="#podglad" data-tab="podglad" class="on">Podgląd <span class="badge" id="ile-alertow"></span></a>
+<a href="#pracownicy" data-tab="pracownicy">Pracownicy</a>
+<a href="#tablety" data-tab="tablety">Tablety i stoły</a>
+<a href="/admin/raporty">Raporty</a>
+</nav>
+</div></header>
+
+<main>
 {{if .Msg}}<div class="err">{{.Msg}}</div>{{end}}
+<div id="alerty"></div>
 
-<div class="box">
-<b>Klucz urządzeń</b> (wpisz w ustawieniach aplikacji na tabletach i terminalach): <code>{{.DeviceKey}}</code><br>
-Panel brygadzisty: <code>/brygadzista</code> (tylko podgląd, logowanie loginem i PIN-em brygadzisty)<br>
-Wersja serwera: {{.Version}}
-</div>
-
+<section class="tab on" id="tab-podglad">
 <h2>Teraz</h2>
 <div class="box" id="stan">Ładowanie…</div>
-
 <h2>Terminale</h2>
 <div class="box" id="terminale">Ładowanie…</div>
+</section>
 
+<section class="tab" id="tab-pracownicy">
 <h2>Pracownicy</h2>
+<p class="hint">PIN / hasło: litery, cyfry i znaki specjalne; po zapisaniu niewidoczny. Brygadzista dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s, i loguje się do panelu brygadzisty <code>/brygadzista</code> swoim loginem i PIN-em.</p>
 <div class="box">
 <table>
-<tr><th>Login</th><th>PIN / hasło (litery, cyfry, znaki; niewidoczne po zapisaniu)</th><th title="Dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s">Brygadzista</th><th></th><th></th></tr>
+<tr><th>Login</th><th>PIN / hasło</th><th title="Dostaje alert, gdy wezwany pracownik nie odpowie w ciągu 60 s">Brygadzista</th><th></th><th></th></tr>
 {{range .Workers}}
 <tr>
 <td><input form="f{{.ID}}" name="name" value="{{.Name}}" required></td>
 <td><input form="f{{.ID}}" name="pin" type="password" autocomplete="new-password" maxlength="64" placeholder="{{if .PinHash}}ustawiony – wpisz nowy{{else}}brak PIN-u{{end}}">{{if .PinHash}} <label title="Usuń PIN"><input form="f{{.ID}}" type="checkbox" name="nopin" value="1"> usuń</label>{{end}}</td>
 <td><input form="f{{.ID}}" type="checkbox" name="foreman" value="1"{{if .Foreman}} checked{{end}}>{{if and .Foreman (not .PinHash)}} <span class="tag red" title="Bez PIN-u nie zaloguje się do panelu brygadzisty">brak PIN-u</span>{{end}}</td>
-<td><form id="f{{.ID}}" method="post"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="save"><button>Zapisz</button></form></td>
-<td><form method="post" onsubmit="return confirm('Usunąć pracownika?')"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="delete"><button>Usuń</button></form></td>
+<td><form id="f{{.ID}}" method="post" action="/admin#pracownicy"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="save"><button class="main">Zapisz</button></form></td>
+<td><form method="post" action="/admin#pracownicy" onsubmit="return confirm('Usunąć pracownika?')"><input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="delete"><button class="danger">Usuń</button></form></td>
 </tr>
 {{end}}
 <tr>
 <td><input form="fnew" name="name" placeholder="Nowy pracownik" required></td>
 <td><input form="fnew" name="pin" type="password" autocomplete="new-password" maxlength="64" placeholder="opcjonalnie"></td>
 <td><input form="fnew" type="checkbox" name="foreman" value="1"></td>
-<td><form id="fnew" method="post"><input type="hidden" name="action" value="save"><button>Dodaj</button></form></td><td></td>
+<td><form id="fnew" method="post" action="/admin#pracownicy"><input type="hidden" name="action" value="save"><button class="main">Dodaj</button></form></td><td></td>
 </tr>
 </table>
 </div>
+</section>
 
+<section class="tab" id="tab-tablety">
 <h2>Tablety i stoły</h2>
+<p class="hint">Każdy tablet zgłasza się swoim ID. Wpisz nazwę stołu (np. KONTR_12) i zapisz, a tablet przełączy się od razu, bez wizyty przy nim. Puste pole usuwa przypisanie.</p>
 <div class="box">
-<p>Każdy tablet zgłasza się swoim ID. Wpisz nazwę stołu (np. KONTR_12) i zapisz, a tablet przełączy się od razu, bez wizyty przy nim. Puste pole usuwa przypisanie.</p>
 <table>
 <tr><th>ID tabletu</th><th>Połączony</th><th>Adres IP</th><th>Wersja</th><th>Stół</th><th></th></tr>
 {{range .Tablets}}
@@ -75,24 +66,48 @@ Wersja serwera: {{.Version}}
 <td>{{.IP}}</td>
 <td>{{.Version}}</td>
 <td><input form="t{{.Device}}" name="name" value="{{.Station}}" placeholder="KONTR_XX" style="text-transform:uppercase"></td>
-<td><form id="t{{.Device}}" method="post"><input type="hidden" name="device" value="{{.Device}}"><input type="hidden" name="action" value="station"><button>Zapisz</button></form></td>
+<td><form id="t{{.Device}}" method="post" action="/admin#tablety"><input type="hidden" name="device" value="{{.Device}}"><input type="hidden" name="action" value="station"><button class="main">Zapisz</button></form></td>
 </tr>
 {{else}}
 <tr><td colspan="6">Żaden tablet jeszcze się nie połączył.</td></tr>
 {{end}}
 </table>
 </div>
+<h2>Ustawienia urządzeń</h2>
+<div class="box">
+<dl class="info">
+<dt>Klucz urządzeń</dt><dd><code>{{.DeviceKey}}</code> – wpisz w ustawieniach aplikacji na tabletach i terminalach</dd>
+<dt>Panel brygadzisty</dt><dd><code>/brygadzista</code> – tylko podgląd, logowanie loginem i PIN-em brygadzisty</dd>
+</dl>
+</div>
+</section>
+</main>
+<footer>Odświeżanie podglądu co 3 s · wersja serwera {{.Version}}</footer>
 
 <script src="/panel.js"></script>
 <script>
+// Zakładki bez przeładowania strony; po zapisie formularza wraca na tę samą zakładkę.
+function showTab(name){
+  if(!document.getElementById('tab-'+name))name='podglad';
+  document.querySelectorAll('nav.menu a[data-tab]').forEach(a=>a.classList.toggle('on',a.dataset.tab===name));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+name));
+}
+document.querySelectorAll('nav.menu a[data-tab]').forEach(a=>a.onclick=e=>{e.preventDefault();history.replaceState(null,'','#'+a.dataset.tab);showTab(a.dataset.tab)});
+showTab(location.hash.slice(1));
+window.addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
+
 async function load(){
  try{
   const r=await fetch('/admin/stan',{cache:'no-store'}); const d=await r.json();
-  let h=renderAlerts(d)+renderLive(d);
+  document.getElementById('alerty').innerHTML=renderAlerts(d);
+  const b=document.getElementById('ile-alertow');
+  b.textContent=d.alerts.length; b.classList.toggle('on',d.alerts.length>0);
+  let h=renderLive(d);
   const on=d.tablets.filter(t=>t.online);
   if(on.length){h+='<p>Stoły online: '+on.map(t=>esc(t.station||('bez stołu: '+t.device))).join(', ')+'</p>'}
   document.getElementById('stan').innerHTML=h;
   document.getElementById('terminale').innerHTML=renderTerminals(d);
+  document.title=(d.alerts.length?'('+d.alerts.length+') ALERT – ':'')+'Przywołania – panel administratora';
  }catch(e){document.getElementById('stan').textContent='Brak połączenia z serwerem'}
 }
 load(); setInterval(load,3000);
