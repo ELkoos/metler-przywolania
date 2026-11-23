@@ -84,7 +84,7 @@ Plik z kluczem nie powinien trafiać do publicznych wydań.
 ### Panel: zakładki
 
 - `/admin`: **Panel** (stan na żywo, terminale, pracownicy, tablety) i **Raporty** (statystyki + pobieranie miesięcznych plików dziennika CSV).
-- `/brygadzista`: **Podgląd** (tylko bieżące zdarzenia, alerty z dźwiękiem, terminale) i **Raporty** (statystyki; alert widoczny jako pasek).
+- `/brygadzista`: **Podgląd** (bieżące zdarzenia, terminale) i **Raporty** (statystyki) – zakładki bez przeładowania strony, więc włączony dźwięk alertów zostaje. Przełącznik dźwięku jest w nagłówku obok „Zalogowany”; wybór jest zapamiętany w przeglądarce, a po odświeżeniu strony wystarczy jedno kliknięcie w dowolnym miejscu.
 
 ### Panel: terminale i statystyki
 
