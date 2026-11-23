@@ -578,4 +578,10 @@ func TestReports(t *testing.T) {
 	if code, body = get("/admin"); code != 200 || strings.Contains(body, `id="statystyki"`) || !strings.Contains(body, "/admin/raporty") {
 		t.Fatalf("panel bez statystyk, z zakladka: %d", code)
 	}
+	if !strings.Contains(body, `href="/panel.css"`) || !strings.Contains(body, `data-tab="pracownicy"`) || !strings.Contains(body, `action="/admin#pracownicy"`) {
+		t.Fatalf("menu panelu: brak arkusza, zakladek albo powrotu na zakladke")
+	}
+	if code, body = get("/panel.css"); code != 200 || !strings.Contains(body, "nav.menu") {
+		t.Fatalf("panel.css: %d", code)
+	}
 }

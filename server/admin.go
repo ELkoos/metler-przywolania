@@ -21,6 +21,9 @@ var adminTpl = template.Must(template.New("admin").Parse(adminHTML))
 //go:embed panel.js
 var panelJS string
 
+//go:embed panel.css
+var panelCSS string
+
 //go:embed brygadzista.html
 var foremanHTML string
 
@@ -136,6 +139,11 @@ func adminRoutes(mux *http.ServeMux, h *Hub, store *Store) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write([]byte(panelJS))
+	})
+	mux.HandleFunc("/panel.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte(panelCSS))
 	})
 	mux.HandleFunc("/admin/stan", requireAdmin(store, liveState(h)))
 	mux.HandleFunc("/admin/statystyki", requireAdmin(store, statsHandler(h)))
