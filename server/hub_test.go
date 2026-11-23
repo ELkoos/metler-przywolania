@@ -405,7 +405,7 @@ func TestEscalation(t *testing.T) {
 	if r := get("/brygadzista", ""); r.StatusCode != 200 {
 		t.Fatalf("brygadzista z sesja: %d", r.StatusCode)
 	}
-	if r := get("/brygadzista/raporty", ""); r.StatusCode != 200 {
+	if r := get("/brygadzista/raporty", ""); r.StatusCode != 303 || r.Header.Get("Location") != "/brygadzista#raporty" {
 		t.Fatalf("raporty brygadzisty: %d", r.StatusCode)
 	}
 	r = get("/brygadzista/stan", "")

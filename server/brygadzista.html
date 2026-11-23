@@ -17,8 +17,10 @@ code{background:#eef;padding:2px 6px;border-radius:4px}
 .alerts{margin-bottom:10px}.alert{background:#d62828;color:#fff;padding:14px 16px;border-radius:8px;margin-bottom:8px;font-size:22px}
 .low{color:#b00020;font-weight:600}
 button.per{padding:4px 12px}button.per.on{background:#1d1d1f;color:#fff;border:1px solid #1d1d1f}
-#dzwiek{background:#ffe7b3;border:1px solid #e0b850;padding:10px;border-radius:8px;margin-bottom:12px}
+.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:-6px 0 12px;color:#555}
+#dzwiek{padding:4px 12px;font-size:14px;border-radius:14px;border:1px solid #e0b850;background:#ffe7b3;cursor:pointer;min-height:32px}
 #dzwiek.on{background:#d9f2e1;border-color:#9fd3b0}
+.tab{display:none}.tab.on{display:block}
 .err{color:#b00020}
 nav.tabs{display:flex;gap:4px;margin:0 0 16px;border-bottom:2px solid #dcdfe4}
 nav.tabs a{padding:8px 16px;text-decoration:none;color:#1d1d1f;border-radius:6px 6px 0 0}
@@ -27,30 +29,65 @@ nav.tabs a.on{background:#1d1d1f;color:#fff}
 </head>
 <body>
 <h1>Panel brygadzisty</h1>
-<p style="margin:-6px 0 12px;color:#555">Zalogowany: <b>{{.Who}}</b> · <a href="/brygadzista/wyloguj">Wyloguj</a></p>
-<nav class="tabs"><a href="/brygadzista" class="on">Podgląd</a><a href="/brygadzista/raporty">Raporty</a></nav>
-<div id="dzwiek">Dźwięk alertów wyłączony. <button id="wlacz">Włącz dźwięk</button> (przeglądarka wymaga jednego kliknięcia po otwarciu strony)</div>
+<div class="top">
+<span>Zalogowany: <b>{{.Who}}</b> · <a href="/brygadzista/wyloguj">Wyloguj</a></span>
+<button id="dzwiek" type="button" title="Przeglądarka pozwala na dźwięk dopiero po kliknięciu na stronie">🔇 Dźwięk alertów: wyłączony – kliknij, aby włączyć</button>
+</div>
+<nav class="tabs"><a href="#podglad" data-tab="podglad" class="on">Podgląd</a><a href="#raporty" data-tab="raporty">Raporty</a></nav>
 <div id="alerty"></div>
 
+<div class="tab on" id="tab-podglad">
 <h2>Teraz</h2>
 <div class="box" id="stan">Ładowanie…</div>
 
 <h2>Terminale</h2>
 <div class="box" id="terminale">Ładowanie…</div>
+</div>
+
+<div class="tab" id="tab-raporty">
+<h2>Statystyki czasu reakcji</h2>
+<div class="box" id="statystyki">Ładowanie…</div>
+</div>
 
 <p style="color:#777;font-size:13px">Odświeżanie co 3 s · wersja serwera {{.Version}}</p>
 
 <script src="/panel.js"></script>
 <script>
-let ctx=null, beepTimer=null, alertCount=0;
-const box=document.getElementById('dzwiek');
-document.getElementById('wlacz').onclick=()=>{
-  try{ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
-  box.className='on'; box.textContent='Dźwięk alertów włączony.';
-  beep();
+// Zakładki bez przeładowania strony: zgoda przeglądarki na dźwięk zostaje przy przełączaniu.
+function showTab(name){
+  if(name!=='raporty')name='podglad';
+  document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.tab===name));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+name));
+  if(name==='raporty')loadStats('/brygadzista');
+}
+document.querySelectorAll('nav.tabs a').forEach(a=>a.onclick=e=>{e.preventDefault();history.replaceState(null,'','#'+a.dataset.tab);showTab(a.dataset.tab)});
+showTab(location.hash.slice(1));
+
+// Dźwięk: wybór zapamiętany w przeglądarce. Po odświeżeniu strony przeglądarka i tak wymaga
+// jednego kliknięcia – wtedy dowolne kliknięcie na stronie włącza dźwięk ponownie.
+let ctx=null, beepTimer=null;
+const btn=document.getElementById('dzwiek');
+function wanted(){try{return localStorage.getItem('przyw-dzwiek')==='1'}catch(e){return false}}
+function setWanted(v){try{localStorage.setItem('przyw-dzwiek',v?'1':'0')}catch(e){}}
+function soundOn(){return ctx&&ctx.state==='running'}
+function paint(){
+  if(soundOn()){btn.className='on';btn.textContent='🔔 Dźwięk alertów: włączony'}
+  else{btn.className='';btn.textContent=wanted()?'🔇 Dźwięk alertów: kliknij gdziekolwiek, aby wznowić':'🔇 Dźwięk alertów: wyłączony – kliknij, aby włączyć'}
+}
+function unlock(){
+  try{if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();ctx.resume().then(paint)}catch(e){}
+}
+btn.onclick=e=>{
+  e.stopPropagation();
+  if(soundOn()){setWanted(false);ctx.suspend().then(paint);return}
+  setWanted(true);unlock();setTimeout(beep,100);
 };
+document.addEventListener('pointerdown',()=>{if(wanted()&&!soundOn())unlock()},true);
+document.addEventListener('keydown',()=>{if(wanted()&&!soundOn())unlock()},true);
+if(wanted())unlock(); // zadziała od razu, jeśli przeglądarka już zezwala
+paint();
 function beep(){
-  if(!ctx)return;
+  if(!soundOn())return;
   const t=ctx.currentTime;
   for(let i=0;i<3;i++){
     const o=ctx.createOscillator(),g=ctx.createGain();
@@ -66,6 +103,7 @@ function sound(on){
 async function load(){
  try{
   const r=await fetch('/brygadzista/stan',{cache:'no-store'});
+  if(r.status===401){location.href='/brygadzista/logowanie';return}
   if(!r.ok)throw new Error();
   const d=await r.json();
   document.getElementById('alerty').innerHTML=renderAlerts(d);
@@ -76,6 +114,7 @@ async function load(){
  }catch(e){document.getElementById('stan').innerHTML='<span class="err">Brak połączenia z serwerem</span>';sound(false)}
 }
 load(); setInterval(load,3000);
+setInterval(()=>{if(document.getElementById('tab-raporty').classList.contains('on'))loadStats('/brygadzista')},60000);
 </script>
 </body>
 </html>
