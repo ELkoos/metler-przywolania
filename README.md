@@ -51,6 +51,14 @@ W panelu dodaj pracowników (login, opcjonalnie PIN/hasło: litery, cyfry i znak
 PIN-y są zapisywane w `dane/workers.json` jako skrót PBKDF2-SHA256 (nie otwartym tekstem) i nie są wyświetlane w panelu;
 puste pole przy zapisie = PIN bez zmian, „usuń” = pracownik bez PIN-u.
 
+### Ikona i instalacja panelu jako aplikacji
+
+Panele mają własną ikonę (niebieski dzwonek) i manifest aplikacji: `/manifest-admin.webmanifest` (start `/admin`)
+oraz `/manifest-brygadzista.webmanifest` (start `/brygadzista`). Ikony i manifesty są publiczne (bez hasła), nie zawierają danych.
+Instalacja w Edge/Chrome: menu przeglądarki → Aplikacje → „Zainstaluj tę witrynę jako aplikację”
+(Chrome: „Przesyłaj, zapisz i udostępnij” → „Zainstaluj stronę jako aplikację” albo „Utwórz skrót…” z „Otwórz jako okno”).
+Panel otwiera się wtedy w osobnym oknie z własną ikoną na pasku zadań.
+
 Serwer powinien mieć stały adres IP (rezerwacja DHCP). Tablety i terminale muszą mieć do niego dostęp na porcie 8080
 (ta sama sieć Wi-Fi albo routing między VLAN-ami, bez izolacji klientów blokującej ruch do serwera).
 

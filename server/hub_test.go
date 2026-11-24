@@ -585,3 +585,40 @@ func TestReports(t *testing.T) {
 		t.Fatalf("panel.css: %d", code)
 	}
 }
+
+func TestIcons(t *testing.T) {
+	mux := http.NewServeMux()
+	iconRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	for p, ct := range map[string]string{
+		"/favicon.ico":                      "image/x-icon",
+		"/apple-touch-icon.png":             "image/png",
+		"/ikony/icon-192.png":               "image/png",
+		"/ikony/icon-512.png":               "image/png",
+		"/ikony/icon-maskable-512.png":      "image/png",
+		"/ikony/icon.svg":                   "image/svg+xml",
+		"/manifest-admin.webmanifest":       "application/manifest+json; charset=utf-8",
+		"/manifest-brygadzista.webmanifest": "application/manifest+json; charset=utf-8",
+	} {
+		r, err := http.Get(srv.URL + p)
+		if err != nil || r.StatusCode != 200 || r.Header.Get("Content-Type") != ct {
+			t.Fatalf("%s: %v %v %s", p, err, r.StatusCode, r.Header.Get("Content-Type"))
+		}
+		if strings.HasSuffix(p, ".webmanifest") {
+			var m struct {
+				StartURL string `json:"start_url"`
+				Icons    []struct{ Src string }
+			}
+			if err := json.NewDecoder(r.Body).Decode(&m); err != nil || len(m.Icons) != 4 || m.StartURL == "" {
+				t.Fatalf("%s: zly manifest %v %+v", p, err, m)
+			}
+		}
+		r.Body.Close()
+	}
+	for _, p := range []string{"/ikony/../config.json", "/ikony/brak.png", "/ikony/icon.txt"} {
+		if r, _ := http.Get(srv.URL + p); r.StatusCode != 404 {
+			t.Fatalf("%s: %d", p, r.StatusCode)
+		}
+	}
+}

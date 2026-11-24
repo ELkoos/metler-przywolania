@@ -64,6 +64,7 @@ func runServer(ctx context.Context) error {
 		http.NotFound(w, r)
 	})
 	adminRoutes(mux, hub, store)
+	iconRoutes(mux)
 	allowSpec := *flagAllow
 	if allowSpec == "" {
 		allowSpec = os.Getenv("PRZYW_ALLOW")
