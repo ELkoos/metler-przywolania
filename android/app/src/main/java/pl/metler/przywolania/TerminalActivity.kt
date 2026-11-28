@@ -59,6 +59,13 @@ class TerminalActivity : Activity() {
                 startActivity(Intent(this, CallActivity::class.java))
             }, lp(top = dp(8)))
         }
+        if (AppState.activeCall == null && AppState.goingTo.isNotEmpty() && System.currentTimeMillis() < AppState.goingUntil) {
+            body.addView(text("Idziesz do ${AppState.goingTo}", 26f, true).apply {
+                gravity = Gravity.CENTER
+                background = rounded(C.BLUE_BG, dp(10).toFloat())
+                setPadding(dp(12), dp(16), dp(12), dp(16))
+            }, lp(top = dp(8)))
+        }
         if (AppState.loggedInName.isNotEmpty()) {
             body.addView(text("Zalogowany", 16f, color = C.MUTED), lp(top = dp(16)))
             body.addView(text(AppState.loggedInName, 28f, true))

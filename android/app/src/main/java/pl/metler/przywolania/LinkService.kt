@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
+import android.widget.Toast
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -197,6 +198,7 @@ class LinkService : Service() {
             "logged_out" -> {
                 prefs.workerId = ""; prefs.workerPin = ""
                 stopCall()
+                clearGoing()
                 clearAlerts()
                 val r = m.optString("reason")
                 AppState.update { loggedInName = ""; if (r.isNotEmpty()) toast = r }
@@ -207,6 +209,7 @@ class LinkService : Service() {
                 val c = CallInfo(m.getString("id"), m.optString("station"), m.optLong("at"))
                 val prevStation = ringingStation
                 ringingStation = c.station
+                clearGoing()
                 AppState.update { activeCall = c }
                 // to samo wezwanie (np. po ponownym połączeniu) albo kolejne ze stanowiska, gdy ekran już dzwoni:
                 // tylko aktualizacja, bez ponownego otwierania ekranu
@@ -340,6 +343,39 @@ class LinkService : Service() {
         val c = AppState.activeCall ?: run { alarm.stop(); nm().cancel(NOTIF_CALL); return }
         send(JSONObject().put("t", "ack").put("id", c.id))
         stopCall()
+        showGoing(c.station)
+    }
+
+    // ---------- "Idziesz do KONTR_XX" po potwierdzeniu (tylko informacja, nie zasłania innych aplikacji) ----------
+
+    private val goingClear = Runnable { clearGoing() }
+
+    private fun showGoing(station: String) {
+        val until = System.currentTimeMillis() + GOING_MS
+        AppState.goingTo = station; AppState.goingUntil = until
+        AppState.update { goingTo = station; goingUntil = until }
+        val pi = PendingIntent.getActivity(this, 4, Intent(this, StartActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = Notification.Builder(this, CH_GOING)
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Idziesz do $station")
+            .setContentText("Potwierdzone – stół wie, że idziesz")
+            .setOngoing(true)
+            .setTimeoutAfter(GOING_MS)
+            .setContentIntent(pi)
+            .build()
+        nm().notify(NOTIF_GOING, n)
+        try { Toast.makeText(this, "Idziesz do $station", Toast.LENGTH_LONG).show() } catch (_: Exception) {}
+        handler.removeCallbacks(goingClear)
+        handler.postDelayed(goingClear, GOING_MS)
+    }
+
+    private fun clearGoing() {
+        handler.removeCallbacks(goingClear)
+        nm().cancel(NOTIF_GOING)
+        if (AppState.goingTo.isEmpty()) return
+        AppState.goingTo = ""; AppState.goingUntil = 0
+        AppState.update { goingTo = ""; goingUntil = 0 }
     }
 
     // ---------- blokady (terminal zalogowany) ----------
@@ -379,8 +415,10 @@ class LinkService : Service() {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setBypassDnd(true)
         }
+        val going = NotificationChannel(CH_GOING, "Idziesz do stołu", NotificationManager.IMPORTANCE_LOW)
         nm().createNotificationChannel(status)
         nm().createNotificationChannel(call)
+        nm().createNotificationChannel(going)
     }
 
     private fun statusNotification(text: String): Notification {
@@ -410,9 +448,12 @@ class LinkService : Service() {
     companion object {
         const val CH_STATUS = "status"
         const val CH_CALL = "wezwania"
+        const val CH_GOING = "idziesz"
+        const val GOING_MS = 3 * 60_000L // tyle samo, ile tablet pokazuje "idzie" (serwer: comingDuration)
         const val NOTIF_STATUS = 1
         const val NOTIF_CALL = 2
         const val NOTIF_ALERT = 3
+        const val NOTIF_GOING = 4
         const val ACTION_RECONNECT = "reconnect"
         const val ACTION_ACK = "ack"
 

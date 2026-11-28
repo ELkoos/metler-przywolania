@@ -24,6 +24,8 @@ object AppState {
     var serverTimeOffset: Long = 0                       // serwer - lokalnie, ms
     var activeCall: CallInfo? = null                     // terminal: bieżące wezwanie
     var alerts: List<AlertInfo> = emptyList()            // terminal brygadzisty: wezwania bez odpowiedzi
+    var goingTo: String = ""                             // terminal: stół, do którego pracownik idzie (po "IDĘ")
+    var goingUntil: Long = 0                             // do kiedy pokazywać "Idziesz do" (czas lokalny, ms)
     var toast: String = ""
 
     private val main = Handler(Looper.getMainLooper())
